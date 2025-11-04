@@ -1,7 +1,7 @@
 import { getAuthHeaders } from './auth'
 
 // API Configuration
-export const API_BASE_URL = 'http://15.207.47.60:8000'
+export const API_BASE_URL = 'https://api.choisircraft.com'
 
 // API Endpoints
 export const API_ENDPOINTS = {
