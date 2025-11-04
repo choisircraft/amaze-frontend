@@ -1,6 +1,8 @@
 "use client"
 
 import React, { useState, useEffect, useMemo } from "react"
+import { DashboardLayout } from "../dashboard-layout" 
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -25,23 +27,12 @@ import {
 // --- Icons ---
 import {
   Landmark, FileUp, ListOrdered, DollarSign, Loader2, Calendar, ChevronDown, Info,
-  Banknote, Calculator, Laptop, Pencil, Trash2, XCircle, CheckCircle
+  Banknote, Calculator, Laptop, Pencil, Trash2, XCircle // Removed CheckCircle
 } from "lucide-react"
 
 // =============================================================
 // TYPES & HELPERS
 // =============================================================
-
-// --- Expense Types ---
-interface ExpenseRecord {
-    id: number;
-    date: string;
-    description: string;
-    amount: number;
-    category: 'Logistics' | 'Office Supply' | 'Travel' | 'Client Entertainment' | 'Other';
-    staff_name: string;
-    status: 'Pending' | 'Approved' | 'Rejected';
-}
 
 // --- Financial Report UI Type ---
 type AccountDetails = { [key: string]: number; }
@@ -61,14 +52,6 @@ type DailyReportEntry = {
 // --- Helper Functions ---
 const formatRupee = (amount: number): string => {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(amount);
-}
-
-const getExpenseStatusColor = (status: ExpenseRecord['status']) => {
-    switch (status) {
-        case 'Approved': return 'bg-green-100 text-green-800';
-        case 'Pending': return 'bg-yellow-100 text-yellow-800';
-        case 'Rejected': return 'bg-red-100 text-red-800';
-    }
 }
 
 const mapApiToComponent = (apiReport: DailySalesReport): DailyReportEntry => {
@@ -94,19 +77,7 @@ const mapApiToComponent = (apiReport: DailySalesReport): DailyReportEntry => {
 };
 
 // =============================================================
-// DUMMY DATA (for Expenses)
-// =============================================================
-const DUMMY_EXPENSES: ExpenseRecord[] = [
-    { id: 101, date: "2024-05-20", description: "Fuel for delivery vehicle (Order 5001)", amount: 1250.50, category: 'Logistics', staff_name: "Charlie Brown", status: 'Pending' },
-    { id: 102, date: "2024-05-19", description: "A4 Paper and ink cartridges", amount: 450.99, category: 'Office Supply', staff_name: "Alice Johnson", status: 'Approved' },
-    { id: 103, date: "2024-05-19", description: "Lunch with potential client", amount: 1880.00, category: 'Client Entertainment', staff_name: "Bob Smith", status: 'Pending' },
-    { id: 104, date: "2024-05-18", description: "Train fare for Delhi meeting", amount: 4500.00, category: 'Travel', staff_name: "David Lee", status: 'Approved' },
-    { id: 105, date: "2024-05-18", description: "Replacement ergonomic mouse", amount: 950.00, category: 'Other', staff_name: "Eve Green", status: 'Rejected' },
-];
-
-
-// =============================================================
-// CHILD COMPONENT: DailyReportUpload (No changes needed)
+// CHILD COMPONENT: DailyReportUpload
 // =============================================================
 interface DailyReportUploadProps {
   onReportCreate: (payload: DailySalesReportCreatePayload) => Promise<boolean>;
@@ -138,7 +109,7 @@ const DailyReportUpload = ({ onReportCreate, onReportUpdate, reportToEdit, onCan
                 sale_order_balance_amount: String(reportToEdit.sale_order_balance_amount ?? ''),
                 total_day_collection: String(reportToEdit.total_day_collection ?? ''),
                 total_amount_on_cash: String(reportToEdit.total_amount_on_cash ?? ''),
-                total_amount_on_ac: String(reportToEdit.total_amount_on_ac ?? ''),
+                total_amount_on_ac: String(reportToReport.total_amount_on_ac ?? ''),
                 iob: String(reportToEdit.iob ?? ''), cd: String(reportToEdit.cd ?? ''), anil: String(reportToEdit.anil ?? ''),
                 remya: String(reportToEdit.remya ?? ''), rgb_186_swiping_machine: String(reportToEdit.rgb_186_swiping_machine ?? ''),
                 amaze_ac: String(reportToEdit.amaze_ac ?? ''), cheque: String(reportToEdit.cheque ?? ''),
@@ -192,7 +163,7 @@ const DailyReportUpload = ({ onReportCreate, onReportUpdate, reportToEdit, onCan
         };
         let success = false;
         if (isEditMode) {
-            success = await onReportUpdate(reportToEdit.id, payload);
+            success = await onReportUpdate(reportToEdit!.id, payload);
         } else {
             success = await onReportCreate(payload);
         }
@@ -253,7 +224,7 @@ const DailyReportUpload = ({ onReportCreate, onReportUpdate, reportToEdit, onCan
 };
 
 // =============================================================
-// CHILD COMPONENT: DailyReportRegister (No changes needed)
+// CHILD COMPONENT: DailyReportRegister
 // =============================================================
 interface DailyReportRegisterProps {
   reports: DailySalesReport[];
@@ -319,7 +290,7 @@ const DailyReportRegister = ({ reports, isLoading, onEdit, onDelete }: DailyRepo
 };
 
 // =============================================================
-// MAIN PAGE COMPONENT (MERGED & ENHANCED)
+// MAIN PAGE COMPONENT (EXPENSE SECTION REMOVED)
 // =============================================================
 export function AccountantDashboard() {
   const { toast } = useToast()
@@ -328,10 +299,9 @@ export function AccountantDashboard() {
   const [reportHistory, setReportHistory] = useState<DailySalesReport[]>([])
   const [isLoading, setIsLoading] = useState(true);
   const [editingReport, setEditingReport] = useState<DailySalesReport | null>(null);
-  const [activeTab, setActiveTab] = useState("expenses");
-
-  // --- State for Expenses ---
-  const totalPendingExpenses = DUMMY_EXPENSES.filter(e => e.status === 'Pending').reduce((sum, e) => sum + e.amount, 0);
+  
+  // Initialize tab to 'upload' since 'expenses' is removed
+  const [activeTab, setActiveTab] = useState("upload"); 
 
   const fetchReports = async () => {
     setIsLoading(true);
@@ -342,8 +312,6 @@ export function AccountantDashboard() {
   };
 
   useEffect(() => { 
-    // We only need to fetch reports if the user might see them.
-    // For now, let's fetch them on component mount.
     fetchReports(); 
   }, []);
 
@@ -393,96 +361,63 @@ export function AccountantDashboard() {
   };
   
   return (
-    // You can wrap this in your <DashboardLayout> in the parent component
-    <div className="space-y-6 p-4 md:p-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6"> 
-            <div className="flex justify-center">
-              <TabsList className="grid w-full grid-cols-3 md:w-auto">
-                <TabsTrigger value="expenses" className="flex items-center"><DollarSign className="w-4 h-4 mr-2" /> Expense Management</TabsTrigger>
-                <TabsTrigger value="upload" className="flex items-center"><FileUp className="w-4 h-4 mr-2" /> Upload Sales Report</TabsTrigger>
-                <TabsTrigger value="register" className="flex items-center"><ListOrdered className="w-4 h-4 mr-2" /> Sales Report Register</TabsTrigger>
-              </TabsList>
+    <DashboardLayout title="Accounts Dashboard" role="accountant">
+        <main className="flex-1 overflow-y-auto">
+            <div className="space-y-6 p-4 md:p-6">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6"> 
+                    <div className="flex justify-center">
+                      <TabsList className="grid w-full grid-cols-2 md:w-auto">
+                        {/* Removed: Expense Management Tab Trigger */}
+                        <TabsTrigger value="upload" className="flex items-center"><FileUp className="w-4 h-4 mr-2" /> Upload Sales Report</TabsTrigger>
+                        <TabsTrigger value="register" className="flex items-center"><ListOrdered className="w-4 h-4 mr-2" /> Sales Report Register</TabsTrigger>
+                      </TabsList>
+                    </div>
+
+                    {/* Removed: TAB 1: EXPENSE MANAGEMENT (TabsContent value="expenses") */}
+
+                    {/* TAB 1 (Now): UPLOAD SALES REPORT */}
+                    <TabsContent value="upload">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center"><Landmark className="h-5 w-5 mr-2 text-indigo-600" />
+                                  {editingReport ? `Editing Report for ${new Date(editingReport.date + 'T00:00:00').toLocaleDateString('en-GB')}` : "Submit Financial Day End Report"}
+                                </CardTitle>
+                                <CardDescription>
+                                  {editingReport ? "Modify the details below and click 'Update Report'." : "Enter key figures from the daily sales and collection summaries."}
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <DailyReportUpload 
+                                onReportCreate={handleCreateReport} 
+                                onReportUpdate={handleUpdateReport}
+                                reportToEdit={editingReport}
+                                onCancelEdit={handleCancelEdit}
+                              />
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                    
+                    {/* TAB 2 (Now): SALES REPORT REGISTER */}
+                    <TabsContent value="register">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center"><ListOrdered className="w-5 w-5 mr-2 text-green-600" />Historical Daily Financial Reports</CardTitle>
+                                <CardDescription>Review, edit, or delete previously submitted reports.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <DailyReportRegister 
+                                reports={reportHistory} 
+                                isLoading={isLoading} 
+                                onEdit={handleEditClick}
+                                onDelete={handleDeleteReport}
+                              />
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
             </div>
-
-            {/* TAB 1: EXPENSE MANAGEMENT */}
-            <TabsContent value="expenses">
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center"><DollarSign className="w-5 h-5 mr-2 text-orange-600" /> Daily Expense Reports</CardTitle>
-                        <CardDescription>
-                            Recent expenses submitted for approval. Total Pending: <span className="font-bold text-red-600">{formatRupee(totalPendingExpenses)}</span>
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        <div className="overflow-x-auto"><div className="min-w-full divide-y divide-gray-200">
-                            <div className="bg-gray-50 hidden md:flex py-3 px-6 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                <div className="w-1/12">ID</div><div className="w-4/12">Description</div><div className="w-2/12 text-right">Amount</div>
-                                <div className="w-2/12 text-center">Staff / Category</div><div className="w-2/12 text-center">Status</div><div className="w-1/12"></div>
-                            </div>
-                            {DUMMY_EXPENSES.map((expense) => (
-                                <div key={expense.id} className="flex flex-col md:flex-row items-start md:items-center py-4 px-6 hover:bg-gray-50 text-sm border-b">
-                                    <div className="w-full md:w-1/12 font-semibold text-gray-900 mb-2 md:mb-0">#{expense.id}</div>
-                                    <div className="w-full md:w-4/12 text-gray-700 mb-2 md:mb-0">{expense.description}</div>
-                                    <div className="w-full md:w-2/12 md:text-right font-bold text-gray-800 mb-2 md:mb-0">{formatRupee(expense.amount)}</div>
-                                    <div className="w-full md:w-2/12 text-xs flex gap-2 md:justify-center mb-2 md:mb-0">
-                                        <Badge variant="outline">{expense.staff_name}</Badge>
-                                        <Badge variant="secondary">{expense.category}</Badge>
-                                    </div>
-                                    <div className="w-full md:w-2/12 flex md:justify-center mb-2 md:mb-0">
-                                        <Badge className={getExpenseStatusColor(expense.status)}>{expense.status}</Badge>
-                                    </div>
-                                    <div className="w-full md:w-1/12 flex justify-end gap-1">
-                                        {expense.status === 'Pending' && (<Button size="icon" variant="ghost" className="h-7 w-7 text-green-600 hover:bg-green-50"><CheckCircle className="h-4 w-4" /></Button>)}
-                                        {expense.status !== 'Approved' && (<Button size="icon" variant="ghost" className="h-7 w-7 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></Button>)}
-                                    </div>
-                                </div>
-                            ))}
-                        </div></div>
-                    </CardContent>
-                </Card>
-            </TabsContent>
-
-            {/* TAB 2: UPLOAD SALES REPORT */}
-            <TabsContent value="upload">
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center"><Landmark className="h-5 w-5 mr-2 text-indigo-600" />
-                          {editingReport ? `Editing Report for ${new Date(editingReport.date + 'T00:00:00').toLocaleDateString('en-GB')}` : "Submit Financial Day End Report"}
-                        </CardTitle>
-                        <CardDescription>
-                          {editingReport ? "Modify the details below and click 'Update Report'." : "Enter key figures from the daily sales and collection summaries."}
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <DailyReportUpload 
-                        onReportCreate={handleCreateReport} 
-                        onReportUpdate={handleUpdateReport}
-                        reportToEdit={editingReport}
-                        onCancelEdit={handleCancelEdit}
-                      />
-                    </CardContent>
-                </Card>
-            </TabsContent>
-            
-            {/* TAB 3: SALES REPORT REGISTER */}
-            <TabsContent value="register">
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center"><ListOrdered className="w-5 w-5 mr-2 text-green-600" />Historical Daily Financial Reports</CardTitle>
-                        <CardDescription>Review, edit, or delete previously submitted reports.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <DailyReportRegister 
-                        reports={reportHistory} 
-                        isLoading={isLoading} 
-                        onEdit={handleEditClick}
-                        onDelete={handleDeleteReport}
-                      />
-                    </CardContent>
-                </Card>
-            </TabsContent>
-        </Tabs>
+        </main>
         <Toaster />
-    </div>
+    </DashboardLayout>
   )
 }
