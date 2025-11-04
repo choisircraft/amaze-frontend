@@ -321,7 +321,7 @@ const DailyReportRegister = ({ reports, isLoading, onEdit, onDelete }: DailyRepo
 // =============================================================
 // MAIN PAGE COMPONENT (MERGED & ENHANCED)
 // =============================================================
-export function AdminFinancialsPage() {
+export function AccountantDashboard() {
   const { toast } = useToast()
   
   // --- State for Sales Reports ---
