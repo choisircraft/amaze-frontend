@@ -17,9 +17,9 @@ import {
   getAllTasks, 
   editTask, 
   getOrderById,
-  type DetailedTask, // Interface from projectManager.ts
+  type DetailedTask, 
   type EditTaskPayload,
-  type OrderDetails, // Interface from projectManager.ts
+  type OrderDetails, 
   type ApiResponse
 } from "@/lib/printing" // Ensure this path is correct for your project
 
@@ -31,7 +31,6 @@ import {
   TrendingUp,
   Filter,        // Filter icon
   Eye,           // View Order
-  Plus,
   Settings,
   Zap,           // In Progress
   UserPlus,      // Assigned By
@@ -243,6 +242,7 @@ export function PrintingDashboard() {
   const loadTasks = async () => {
     setIsLoading(true)
     setError(null)
+    // NOTE: Using getAllTasks from "@/lib/printing"
     const response = await getAllTasks()
 
     if (response.error) {
@@ -259,6 +259,7 @@ export function PrintingDashboard() {
     setViewingOrder(null);
     setIsOrderDetailsLoading(true);
     
+    // NOTE: Using getOrderById from "@/lib/printing"
     const response = await getOrderById(orderId);
     
     if (response.data) {
@@ -283,8 +284,10 @@ export function PrintingDashboard() {
     // Auto-set completion time if marking as complete
     if (newStatus === "completed") {
       payload.completion_time = new Date().toISOString(); 
+      // The backend should handle setting completed_on if completion_time is provided upon completion
     }
     
+    // NOTE: Using editTask from "@/lib/printing"
     const response = await editTask(taskId, payload)
 
     if (response.error) {
@@ -379,7 +382,7 @@ export function PrintingDashboard() {
         </TabsList>
 
         {/* ==================================================================== */}
-        {/* REPORTS SECTION (New) */}
+        {/* REPORTS SECTION */}
         {/* ==================================================================== */}
         <TabsContent value="reports" className="space-y-6">
             <h3 className="text-xl font-semibold mb-4">Performance Overview</h3>
@@ -415,7 +418,7 @@ export function PrintingDashboard() {
 
 
         {/* ==================================================================== */}
-        {/* LIVE TASK SECTION (Print Tasks)                                    */}
+        {/* LIVE TASK SECTION (Print Tasks) - REFACTORED TO MATCH DESIGNER DASHBOARD */}
         {/* ==================================================================== */}
         <TabsContent value="tasks" className="space-y-6">
           <Card>
@@ -429,7 +432,6 @@ export function PrintingDashboard() {
                       Monitor and manage printing jobs. Update status from Queued -> In Progress -> Completed.
                     </CardDescription>
                   </div>
-                 
               </div>
             </CardHeader>
             <CardContent>
@@ -502,74 +504,129 @@ export function PrintingDashboard() {
                     const targetClass = isTargetToday 
                         ? 'font-bold text-red-700 bg-red-100 p-1 rounded' 
                         : 'text-gray-600';
+
+                    // --- NEW LOGIC: Check for Overdue Task ---
+                    const isCompleted = task.status === 'completed';
+                    let isOverdue = false;
+                    
+                    if (!isCompleted && task.completion_time) {
+                        const dueDate = new Date(task.completion_time);
+                        // Compare against the end of the due day
+                        dueDate.setHours(23, 59, 59, 999); 
+                        const now = new Date();
+                        
+                        if (now.getTime() > dueDate.getTime()) {
+                            isOverdue = true;
+                        }
+                    }
+
+                    // Conditional styling for the task card
+                    const cardClass = isOverdue 
+                        ? "border-4 border-red-500 rounded-lg p-3 sm:p-4 bg-red-50" 
+                        : "border rounded-lg p-3 sm:p-4";
                         
                     return (
-                        <div key={task.id} className="border rounded-lg p-4">
-                            <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
-                                {/* Task Details */}
-                                <div className="flex-1">
-                                    <p className="font-semibold text-lg">{task.task_description || "Untitled Print Job"}</p>
-                                    <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-600">
+                        <div key={task.id} className={cardClass}>
+                            <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
+                                
+                                {/* Task Details (Left side, takes up space) */}
+                                <div className="flex-1 min-w-0">
+                                    
+                                    {/* 1. Customer Name as Main Title (Blue/Large) */}
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 border-b pb-2">
+                                        <h2 className="font-bold text-lg text-blue-700 truncate max-w-full">
+                                            Customer: {task.customer?.name || "N/A"} 
+                                        </h2>
                                         
-                                        {/* 1. Project ID */}
+                                        {/* Show Task ID explicitly */}
+                                        <p className="text-sm text-gray-500 flex-shrink-0">
+                                            Task ID: <span className="font-semibold text-gray-800">#{task.id}</span>
+                                        </p>
+                                    </div>
+
+                                    {/* 2. Product Name / Order ID Block (Highlighted) */}
+                                    <div className="mb-3">
+                                        <h3 className="text-xs font-medium text-gray-600 mb-1 flex items-center">
+                                            <Package className="h-3 w-3 mr-1 text-blue-600" /> Project / Product Details:
+                                        </h3>
+                                        <div className="text-sm text-gray-700 p-2 bg-blue-50/70 border border-blue-200 rounded whitespace-pre-wrap max-h-20 overflow-y-auto">
+                                            <p className="font-semibold text-base text-blue-800 mb-1">
+                                                {task.order?.product_name || "Product Name N/A"}
+                                            </p>
+                                            <p className="text-xs text-blue-600">
+                                                Order ID: {task.order?.generated_order_id || `PRJ-${task.order_id}`}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* 3. Metadata block (Condensed) */}
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                                        
+                                        {/* Project ID */}
                                         <span className="flex items-center">
-                                            <FolderOpen className="h-4 w-4 mr-2 text-gray-400" />
-                                            Order ID: ORD-{task.order_id}
+                                            <FolderOpen className="h-3 w-3 mr-1 text-gray-400" />
+                                            Order Id: {task.order_id}
                                         </span>
                                         
-                                        {/* 2. Task Assigned On Date (Only Date) */}
+                                        {/* Task Assigned On Date */}
                                         <span className="flex items-center">
-                                            <Clock className="h-4 w-4 mr-2 text-gray-400" />
-                                            Task Assigned On: {new Date(task.assigned_on).toLocaleDateString()}
+                                            <Clock className="h-3 w-3 mr-1 text-gray-400" />
+                                            Assigned On: {new Date(task.assigned_on).toLocaleDateString()}
                                         </span>
                                         
-                                        {/* 3. Task Completion Due (Shows deadline if one exists, regardless of status) */}
+                                        {/* Task Completion Due (Styled based on overdue status) */}
                                         {task.completion_time && (
-                                            <span className="flex items-center text-gray-600 font-medium">
-                                                <Hourglass className="h-4 w-4 mr-2 text-gray-500" />
-                                                Task Deadline: {new Date(task.completion_time).toLocaleDateString()}
+                                            <span className={`flex items-center font-medium ${isOverdue ? 'text-red-700 font-bold' : 'text-gray-600'}`}>
+                                                <Hourglass className={`h-3 w-3 mr-1 ${isOverdue ? 'text-red-600' : 'text-gray-500'}`} />
+                                                Due: {new Date(task.completion_time).toLocaleDateString()}
+                                                {isOverdue && <Badge variant="destructive" className="ml-1 h-3 text-xs p-1">OVERDUE</Badge>}
                                             </span>
                                         )}
 
-                                        {/* --- ACTUAL COMPLETION TIMESTAMP (Only if completed) --- */}
+                                        {/* Actual Completion Date */}
                                         {task.status === 'completed' && task.completed_on && (
                                             <span className="flex items-center text-green-700 font-medium">
-                                                <CheckIcon className="h-4 w-4 mr-2 text-green-500" />
-                                                Printed On: {new Date(task.completed_on).toLocaleDateString()}
+                                                <CheckIcon className="h-3 w-3 mr-1 text-green-500" />
+                                                Printed: {new Date(task.completed_on).toLocaleDateString()}
                                             </span>
                                         )}
 
-                                        {/* 4. Project Target Completion Date (Dynamic Color, Only Date) */}
+                                        {/* Project Target Completion Date */}
                                         <span className={`flex items-center ${targetClass}`}>
-                                            <Calendar className={`h-4 w-4 mr-2 ${isTargetToday ? 'text-red-600' : 'text-gray-400'}`} />
-                                            Order Delivery Target: {task.order_completion_date ? new Date(task.order_completion_date).toLocaleDateString() : "TBD"}
-                                            {isTargetToday && <Badge variant="destructive" className="ml-2 h-4">DUE TODAY</Badge>}
+                                            <Calendar className={`h-3 w-3 mr-1 ${isTargetToday ? 'text-red-600' : 'text-gray-400'}`} />
+                                            Target: {task.order_completion_date ? new Date(task.order_completion_date).toLocaleDateString() : "TBD"}
+                                            {isTargetToday && <Badge variant="destructive" className="ml-1 h-3 text-xs p-1">DUE TODAY</Badge>}
                                         </span>
                                         
-                                        {/* 5. Assigned By */}
+                                        {/* Assigned By */}
                                         <span className="flex items-center">
-                                            <UserPlus className="h-4 w-4 mr-2 text-gray-400" />
+                                            <UserPlus className="h-3 w-3 mr-1 text-gray-400" />
                                             Assigned By: {task.assigned_by?.staff_name || "N/A"}
                                         </span>
-                                        
-                                        {/* 6. Assigned To */}
-                                        <span className="flex items-center">
-                                            <Printer className="h-4 w-4 mr-2 text-gray-400" />
-                                            Assigned Printer: {task.assigned_to?.staff_name || "N/A"}
-                                        </span>
 
+                                        {/* Assigned To (Printer) */}
+                                        <span className="flex items-center">
+                                            <Printer className="h-3 w-3 mr-1 text-gray-400" />
+                                            Assigned To: {task.assigned_to?.staff_name || "N/A"}
+                                        </span>
+                                        
+                                        {/* Task Description Snippet */}
+                                        <div className="mt-2 w-full pt-2 border-t text-xs text-gray-500">
+                                            <span className="font-semibold text-gray-700 mr-2">Task Description:</span>
+                                            <span className="italic">{task.task_description?.substring(0, 100) || "No specific task note provided."}</span>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Status Editor & Actions */}
-                                <div className="w-full sm:w-auto flex flex-col items-end gap-2">
+                                {/* Status Editor & Actions (Right side, wraps below on mobile) */}
+                                <div className="w-full sm:w-auto flex flex-col items-end gap-2 pt-3 sm:pt-0 border-t sm:border-t-0">
                                 
                                     {/* Conditional Status Action Buttons */}
                                     {task.status === 'assigned' && (
                                         <Button 
                                             onClick={() => handleStatusChange(task.id, 'in_progress')}
                                             disabled={updatingTaskId === task.id}
-                                            className="w-full sm:min-w-[180px]"
+                                            className="w-full sm:min-w-[180px] h-9 text-sm"
                                             variant="default" 
                                         >
                                             {updatingTaskId === task.id ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Zap className="h-4 w-4 mr-2" />}
@@ -581,7 +638,7 @@ export function PrintingDashboard() {
                                         <Button 
                                             onClick={() => handleStatusChange(task.id, 'completed')}
                                             disabled={updatingTaskId === task.id}
-                                            className="w-full sm:min-w-[180px] bg-blue-600 hover:bg-blue-700"
+                                            className="w-full sm:min-w-[180px] h-9 text-sm bg-blue-600 hover:bg-blue-700"
                                             variant="default"
                                         >
                                             {updatingTaskId === task.id ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
@@ -591,21 +648,21 @@ export function PrintingDashboard() {
 
                                     {task.status === 'completed' && (
                                         <div className="w-full sm:min-w-[180px] p-2 bg-green-50 text-green-700 rounded-md border border-green-200 text-center text-sm font-medium">
-                                            Task Finished
+                                            Task Finished / Closed
                                         </div>
                                     )}
                                     
                                     {/* Current Status Badge and View Order Button */}
                                     <div className="flex justify-between items-center w-full sm:w-auto gap-2">
-                                        <Badge variant="secondary" className={`capitalize ${getTaskStatusColor(task.status)}`}>
-                                            Current: {task.status.replace(/_/g, ' ')}
+                                        <Badge variant="secondary" className={`capitalize ${getTaskStatusColor(task.status)} text-xs`}>
+                                            {task.status.replace(/_/g, ' ')}
                                         </Badge>
                                         
                                         {/* ACTION: View Order Details Button */}
                                         <Button 
                                             variant="secondary" 
                                             size="sm" 
-                                            className="h-8"
+                                            className="h-8 text-xs"
                                             onClick={() => handleViewOrder(task.order_id)}
                                             disabled={isOrderDetailsLoading}
                                         >
@@ -623,12 +680,10 @@ export function PrintingDashboard() {
           </Card>
         </TabsContent>
         
-        {/* Removed Material, Equipment, Quality Control Tabs */}
-
       </Tabs>
       
       {/* ==================================================================== */}
-      {/* MOBILE FILTER DIALOG */}
+      {/* MOBILE FILTER DIALOG (Unchanged) */}
       {/* ==================================================================== */}
       <Dialog open={isMobileFilterOpen} onOpenChange={setIsMobileFilterOpen}>
           <DialogContent className="sm:max-w-[425px]">
@@ -669,7 +724,7 @@ export function PrintingDashboard() {
 
 
       {/* ==================================================================== */}
-      {/* ORDER DETAILS VIEW DIALOG */}
+      {/* ORDER DETAILS VIEW DIALOG (Unchanged) */}
       {/* ==================================================================== */}
       <Dialog open={!!viewingOrder || isOrderDetailsLoading} onOpenChange={(open) => { 
           if (!open) { 
@@ -723,6 +778,8 @@ export function PrintingDashboard() {
                               </div>
                           </div>
                           
+                          {/* NOTE: Image Manager Dialog functionality from Designer Dashboard is intentionally omitted here as it depends on separate API imports not available in printing dashboard context. */}
+
                           {/* ORDER CORE DETAILS */}
                           <h4 className="font-bold text-gray-700 mt-2 border-t pt-3">Product & Order Details</h4>
                           
