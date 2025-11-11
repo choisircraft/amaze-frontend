@@ -23,8 +23,8 @@ import {
   getOrderById, 
   type OrderDetails,
   type ApiResponse,
-  type OrderImage, // <-- USING THE IMPORTED TYPE
-  getOrderImages // <-- USING THE IMPORTED FUNCTION
+  type OrderImage, 
+  getOrderImages 
 } from "@/lib/designer" 
 
 import {
@@ -54,7 +54,7 @@ import {
 
 
 // =============================================================
-// IMAGE MANAGER DIALOG (Now fully relying on imported API)
+// IMAGE MANAGER DIALOG (Unchanged)
 // =============================================================
 
 interface ProjectImageManagerProps {
@@ -230,7 +230,7 @@ const getProjectStatusColor = (status?: string | null) => {
 // --- MOCK DATA FOR METRICS (Unchanged) ---
 const designMetrics = [
   { name: "Active Projects", value: "8", change: "+2", icon: Palette },
-  { name: "Designs Created", value: "47", change: "+12", icon: ImageIcon },
+  { name: "Designs Created", value: "47", "change": "+12", icon: ImageIcon },
   { name: "Approval Rate", value: "92%", change: "+5%", icon: CheckCircle },
   { name: "Avg. Turnaround", value: "2.3 days", change: "-0.5", icon: Clock },
 ]
@@ -600,77 +600,127 @@ export function DesignerDashboard() {
                     const targetClass = isTargetToday 
                         ? 'font-bold text-red-700 bg-red-100 p-1 rounded' 
                         : 'text-gray-600';
+
+                    // --- NEW LOGIC: Check for Overdue Task ---
+                    const isCompleted = task.status === 'completed';
+                    let isOverdue = false;
+                    
+                    if (!isCompleted && task.completion_time) {
+                        const dueDate = new Date(task.completion_time);
+                        // Compare against the end of the due day
+                        dueDate.setHours(23, 59, 59, 999); 
+                        const now = new Date();
+                        
+                        if (now.getTime() > dueDate.getTime()) {
+                            isOverdue = true;
+                        }
+                    }
+
+                    // Conditional styling for the task card
+                    const cardClass = isOverdue 
+                        ? "border-4 border-red-500 rounded-lg p-3 sm:p-4 bg-red-50" 
+                        : "border rounded-lg p-3 sm:p-4";
                         
                     return (
-                        <div key={task.id} className="border rounded-lg p-4">
-                            <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
-                                {/* Task Details */}
-                                <div className="flex-1">
-                                    <p className="font-semibold text-lg">{task.task_description || "Untitled Task"}</p>
-                                    <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-600">
+                        <div key={task.id} className={cardClass}>
+                            <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
+                                
+                                {/* Task Details (Left side, takes up space) */}
+                                <div className="flex-1 min-w-0">
+                                    
+                                    {/* 1. Customer Name as Main Title (Blue/Large) */}
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 border-b pb-2">
+                                        <h2 className="font-bold text-lg text-blue-700 truncate max-w-full">
+                                            Customer: {task.customer?.name || "N/A"} 
+                                        </h2>
                                         
-                                        {/* 1. Project ID */}
+                                        {/* Show Task ID explicitly */}
+                                        <p className="text-sm text-gray-500 flex-shrink-0">
+                                            Task ID: <span className="font-semibold text-gray-800">#{task.id}</span>
+                                        </p>
+                                    </div>
+
+                                    {/* 2. MODIFIED: Product Name / Order ID Block (Highlighted) */}
+                                    <div className="mb-3">
+                                        <h3 className="text-xs font-medium text-gray-600 mb-1 flex items-center">
+                                            <Package className="h-3 w-3 mr-1 text-blue-600" /> Project / Product Details:
+                                        </h3>
+                                        <div className="text-sm text-gray-700 p-2 bg-blue-50/70 border border-blue-200 rounded whitespace-pre-wrap max-h-20 overflow-y-auto">
+                                            <p className="font-semibold text-base text-blue-800 mb-1">
+                                                {task.order?.product_name || "Product Name N/A"}
+                                            </p>
+                                            <p className="text-xs text-blue-600">
+                                                Order ID: {task.order?.generated_order_id || `PRJ-${task.order_id}`}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* 3. Metadata block (Condensed) */}
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                                        
+                                        {/* Project ID */}
                                         <span className="flex items-center">
-                                            <FolderOpen className="h-4 w-4 mr-2 text-gray-400" />
-                                            Project: PRJ-{task.order_id}
+                                            <FolderOpen className="h-3 w-3 mr-1 text-gray-400" />
+                                            Project Id: {task.order_id}
                                         </span>
                                         
-                                        {/* 2. Task Assigned On Date (Only Date) */}
+                                        {/* Task Assigned On Date */}
                                         <span className="flex items-center">
-                                            <Clock className="h-4 w-4 mr-2 text-gray-400" />
-                                            Task Assigned On: {new Date(task.assigned_on).toLocaleDateString()}
+                                            <Clock className="h-3 w-3 mr-1 text-gray-400" />
+                                            Assigned On: {new Date(task.assigned_on).toLocaleDateString()}
                                         </span>
                                         
-                                        {/* 3. Task Completion Due (Shows deadline if one exists, regardless of status) */}
+                                        {/* Task Completion Due (MODIFIED for Overdue styling) */}
                                         {task.completion_time && (
-                                            <span className="flex items-center text-gray-600 font-medium">
-                                                <Hourglass className="h-4 w-4 mr-2 text-gray-500" />
-                                                Task Completion Due: {new Date(task.completion_time).toLocaleDateString()}
+                                            <span className={`flex items-center font-medium ${isOverdue ? 'text-red-700 font-bold' : 'text-gray-600'}`}>
+                                                <Hourglass className={`h-3 w-3 mr-1 ${isOverdue ? 'text-red-600' : 'text-gray-500'}`} />
+                                                Due: {new Date(task.completion_time).toLocaleDateString()}
+                                                {isOverdue && <Badge variant="destructive" className="ml-1 h-3 text-xs p-1">OVERDUE</Badge>}
                                             </span>
                                         )}
 
-                                        {/* --- ACTUAL COMPLETION TIMESTAMP (Only if completed) --- */}
+                                        {/* Actual Completion Date */}
                                         {task.status === 'completed' && task.completed_on && (
                                             <span className="flex items-center text-green-700 font-medium">
-                                                <CheckIcon className="h-4 w-4 mr-2 text-green-500" />
-                                                Task Done Date: {new Date(task.completed_on).toLocaleDateString()}
+                                                <CheckIcon className="h-3 w-3 mr-1 text-green-500" />
+                                                Done: {new Date(task.completed_on).toLocaleDateString()}
                                             </span>
                                         )}
 
-                                        {/* 4. Project Target Completion Date (Dynamic Color, Only Date) */}
+                                        {/* Project Target Completion Date */}
                                         <span className={`flex items-center ${targetClass}`}>
-                                            <Calendar className={`h-4 w-4 mr-2 ${isTargetToday ? 'text-red-600' : 'text-gray-400'}`} />
-                                            Project Completion Target: {task.order_completion_date ? new Date(task.order_completion_date).toLocaleDateString() : "TBD"}
-                                            {isTargetToday && <Badge variant="destructive" className="ml-2 h-4">DUE TODAY</Badge>}
+                                            <Calendar className={`h-3 w-3 mr-1 ${isTargetToday ? 'text-red-600' : 'text-gray-400'}`} />
+                                            Target: {task.order_completion_date ? new Date(task.order_completion_date).toLocaleDateString() : "TBD"}
+                                            {isTargetToday && <Badge variant="destructive" className="ml-1 h-3 text-xs p-1">DUE TODAY</Badge>}
                                         </span>
                                         
-                                        {/* 5. Assigned By */}
+                                        {/* Assigned By */}
                                         <span className="flex items-center">
-                                            <UserPlus className="h-4 w-4 mr-2 text-gray-400" />
-                                            Assigned By: {task.assigned_by?.staff_name || "N/A"}
+                                            <UserPlus className="h-3 w-3 mr-1 text-gray-400" />
+                                            By: {task.assigned_by?.staff_name || "N/A"}
                                         </span>
-
-                                        {task.generated_order_id && (
-                                            <Badge variant="secondary" className="bg-purple-100 text-purple-700 font-semibold text-xs">
-                                                Generated ID: {task.generated_order_id}
-                                            </Badge>
-                                        )}
+                                        
+                                        {/* NEW: Task Description Snippet (Moved from primary block) */}
+                                        <div className="mt-2 w-full pt-2 border-t text-xs text-gray-500">
+                                            <span className="font-semibold text-gray-700 mr-2">Task Description:</span>
+                                            <span className="italic">{task.task_description?.substring(0, 100) || "No specific task note provided."}</span>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Status Editor & Actions */}
-                                <div className="w-full sm:w-auto flex flex-col items-end gap-2">
+                                {/* Status Editor & Actions (Right side, wraps below on mobile) */}
+                                <div className="w-full sm:w-auto flex flex-col items-end gap-2 pt-3 sm:pt-0 border-t sm:border-t-0">
                                 
                                     {/* Conditional Status Action Buttons */}
                                     {task.status === 'assigned' && (
                                         <Button 
                                             onClick={() => handleStatusChange(task.id, 'in_progress')}
                                             disabled={updatingTaskId === task.id}
-                                            className="w-full sm:min-w-[180px]"
+                                            className="w-full sm:min-w-[180px] h-9 text-sm"
                                             variant="default" 
                                         >
                                             {updatingTaskId === task.id ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckSquare className="h-4 w-4 mr-2" />}
-                                            Accept Task (Start Work)
+                                            Accept Task
                                         </Button>
                                     )}
 
@@ -678,7 +728,7 @@ export function DesignerDashboard() {
                                         <Button 
                                             onClick={() => handleStatusChange(task.id, 'completed')}
                                             disabled={updatingTaskId === task.id}
-                                            className="w-full sm:min-w-[180px]"
+                                            className="w-full sm:min-w-[180px] h-9 text-sm"
                                             variant="default"
                                         >
                                             {updatingTaskId === task.id ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
@@ -694,15 +744,15 @@ export function DesignerDashboard() {
                                     
                                     {/* Current Status Badge and View Order Button */}
                                     <div className="flex justify-between items-center w-full sm:w-auto gap-2">
-                                        <Badge variant="secondary" className={`capitalize ${getTaskStatusColor(task.status)}`}>
-                                            Current: {task.status.replace(/_/g, ' ')}
+                                        <Badge variant="secondary" className={`capitalize ${getTaskStatusColor(task.status)} text-xs`}>
+                                            {task.status.replace(/_/g, ' ')}
                                         </Badge>
                                         
                                         {/* ACTION: View Order Details Button */}
                                         <Button 
                                             variant="secondary" 
                                             size="sm" 
-                                            className="h-8"
+                                            className="h-8 text-xs"
                                             onClick={() => handleViewOrder(task.order_id)}
                                             disabled={isOrderDetailsLoading}
                                         >
@@ -764,7 +814,7 @@ export function DesignerDashboard() {
 
 
       {/* ==================================================================== */}
-      {/* ORDER DETAILS VIEW DIALOG (Contains Image Button)                    */}
+      {/* ORDER DETAILS VIEW DIALOG (Unchanged)                                */}
       {/* ==================================================================== */}
       <Dialog open={!!viewingOrder || isOrderDetailsLoading} onOpenChange={(open) => { 
           if (!open) { 
