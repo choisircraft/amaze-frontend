@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
-import { Progress } from "@/components/ui/progress"
+// import { Progress } from "@/components/ui/progress" // Not used in this context
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -60,13 +60,15 @@ import {
   Repeat2, 
   ChevronDown,
   Image as ImageIcon,
+  Hourglass, // Added for Due Date/Overdue
+  XCircle, // Added for Filter Clear (though not implemented in provided filters)
 } from "lucide-react"
 
 type OrderWithGeneratedId = Order & { generated_order_id?: string | null };
 
 
 // =============================================================
-// 1. IMAGE MANAGER DIALOG 
+// 1. IMAGE MANAGER DIALOG (Keep as is)
 // =============================================================
 
 interface ProjectImageManagerProps {
@@ -188,6 +190,21 @@ const ProjectImageManagerDialog: React.FC<ProjectImageManagerProps> = ({ order, 
 
 
 // --- Helper Functions and Constants ---
+
+const isDateToday = (dateString?: string | null): boolean => {
+    if (!dateString) return false;
+    
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return false;
+
+    const today = new Date();
+    
+    date.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+
+    return date.getTime() === today.getTime();
+};
+
 const getProjectStatusColor = (status?: string | null) => {
   switch (status) {
     case 'completed': return 'bg-green-100 text-green-800'
@@ -497,8 +514,9 @@ export function ProjectDashboard() {
             matchesDate = false;
         } else {
             if (orderFromDate) {
-                const fromDate = new Date(orderFromDate).getTime();
-                matchesDate = matchesDate && projectCompletionDate >= fromDate;
+                const fromDate = new Date(orderFromDate);
+                fromDate.setHours(0, 0, 0, 0);
+                matchesDate = matchesDate && projectCompletionDate >= fromDate.getTime();
             }
             if (orderToDate) {
                 const toDate = new Date(orderToDate);
@@ -544,8 +562,9 @@ export function ProjectDashboard() {
             matchesDate = false;
         } else {
             if (taskFromDate) {
-                const fromDate = new Date(taskFromDate).getTime();
-                matchesDate = matchesDate && taskCompletionTime >= fromDate;
+                const fromDate = new Date(taskFromDate);
+                fromDate.setHours(0, 0, 0, 0);
+                matchesDate = matchesDate && taskCompletionTime >= fromDate.getTime();
             }
             if (taskToDate) {
                 const toDate = new Date(taskToDate);
@@ -713,7 +732,7 @@ export function ProjectDashboard() {
             ))}
           </TabsList>
           
-          {/* PROJECTS TAB (Order List) */}
+          {/* PROJECTS TAB (Order List) - (Unchanged for this request) */}
           <TabsContent value="projects" className="space-y-6">
             <Card>
               <CardHeader>
@@ -909,14 +928,16 @@ export function ProjectDashboard() {
             </Card>
           </TabsContent>
 
-          {/* TASKS TAB (Updated to highlight Customer Name) */}
+          {/* ==================================================================== */}
+          {/* REFACTORED TASKS TAB (To match the detailed design)                  */}
+          {/* ==================================================================== */}
           <TabsContent value="tasks" className="space-y-6">
             <Card>
               <CardHeader>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                   <div>
                     <CardTitle className="flex items-center"><CheckSquare className="h-5 w-5 mr-2" />Task Management</CardTitle>
-                    <CardDescription>Track individual tasks and assignments</CardDescription>
+                    <CardDescription>Track individual tasks and assignments across all projects.</CardDescription>
                   </div>
                 </div>
               </CardHeader>
@@ -960,87 +981,135 @@ export function ProjectDashboard() {
                         <div className="text-center py-8">
                             <CheckSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                             <p className="text-gray-500">
-                                {taskSearchTerm || taskStatusFilter !== 'all' || taskStaffFilterName !== 'all' || taskFromDate || taskToDate ? 'No tasks found matching criteria.' : 'No tasks found.'}
+                                {taskSearchTerm || taskStatusFilter !== 'all' || taskStaffFilterName !== 'all' || taskFromDate || taskToDate ? 'No tasks found matching criteria.' : 'No tasks assigned yet.'}
                             </p>
                         </div>
                     ) : (
                         filteredTasks.map((task) => {
-                            // Fetch Customer Name from the lookup map
                             const associatedProject = projectLookup[task.order_id];
                             const customerName = associatedProject?.customer_name || `Order PRJ-${task.order_id}`;
+                            const productName = associatedProject?.product_name || "Product Name N/A";
+                            const generatedOrderId = associatedProject?.generated_order_id;
+                            const projectCompletionDate = associatedProject?.completion_date;
+
+                            // --- Task Overdue Check ---
+                            const isCompleted = task.status === 'completed';
+                            let isOverdue = false;
                             
+                            if (!isCompleted && task.completion_time) {
+                                const dueDate = new Date(task.completion_time);
+                                dueDate.setHours(23, 59, 59, 999); 
+                                const now = new Date();
+                                
+                                if (now.getTime() > dueDate.getTime()) {
+                                    isOverdue = true;
+                                }
+                            }
+
+                            // --- Project Target Styling ---
+                            const isTargetToday = isDateToday(projectCompletionDate);
+                            const targetClass = isTargetToday 
+                                ? 'font-bold text-red-700 bg-red-100 p-1 rounded' 
+                                : 'text-gray-600';
+
+                            // Conditional styling for the task card
+                            const cardClass = isOverdue 
+                                ? "border-4 border-red-500 rounded-lg p-3 sm:p-4 bg-red-50" 
+                                : "border rounded-lg p-3 sm:p-4 bg-white";
+                                
                             return (
-                                <div key={task.id} className="border rounded-lg p-4">
-                                    <div className="flex flex-col md:flex-row items-start justify-between gap-4">
-                                        <div className="flex items-start space-x-4 flex-1">
-                                            <div className="w-10 h-10 bg-blue-100 rounded-full flex-shrink-0 flex items-center justify-center">
-                                                <CheckSquare className="h-5 w-5 text-blue-600" />
-                                            </div>
-                                            <div className="flex-1">
-                                                {/* MODIFICATION: Highlight Customer Name */}
-                                                <h3 className="font-bold text-lg text-purple-700">
-                                                    {customerName}
-                                                </h3>
-                                                {/* Task Description is secondary */}
-                                                <p className="font-medium text-gray-700 mt-1">
-                                                    Task: {task.task_description || "Untitled Task"}
-                                                </p>
+                                <div key={task.id} className={cardClass}>
+                                    <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
+                                        
+                                        {/* Task Details (Left side, takes up space) */}
+                                        <div className="flex-1 min-w-0">
+                                            
+                                            {/* 1. Customer Name as Main Title */}
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2 border-b pb-2">
+                                                <h2 className="font-bold text-lg text-blue-700 truncate max-w-full">
+                                                    Customer: {customerName} 
+                                                </h2>
                                                 
-                                                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm text-gray-600">
-                                                    <div className="flex items-center">
-                                                        <User className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
-                                                        <div>
-                                                            <span className="font-medium text-gray-800">Assigned To:</span>{' '}
-                                                            {task.assigned_to?.staff_name ? (
-                                                                <>{task.assigned_to.staff_name}{task.assigned_to.role && <span className="text-gray-500"> ({task.assigned_to.role})</span>}</>
-                                                            ) : (<span className="italic">Not Assigned</span>)}
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <UserPlus className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
-                                                        <div>
-                                                            <span className="font-medium text-gray-800">Assigned By:</span>{' '}
-                                                            {task.assigned_by?.staff_name ? (
-                                                                <>{task.assigned_by.staff_name}{task.assigned_by.role && <span className="text-gray-500"> ({task.assigned_by.role})</span>}</>
-                                                            ) : (<span className="italic">System/Unknown</span>)}
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center">
-                                                        <Calendar className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
-                                                        <div>
-                                                            <span className="font-medium text-gray-800">Due Date:</span>{' '}
-                                                            {task.completion_time ? new Date(task.completion_time).toLocaleDateString() : "TBD"}
-                                                        </div>
-                                                    </div>
-                                                    {task.updated_by?.staff_name && (
-                                                        <div className="flex items-center">
-                                                            <Edit className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
-                                                            <div>
-                                                                <span className="font-medium text-gray-800">Updated By:</span>{' '}
-                                                                {task.updated_by.staff_name}
-                                                                {task.updated_by.role && <span className="text-gray-500"> ({task.updated_by.role})</span>}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                    <div className="flex items-center">
-                                                        <FolderOpen className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
-                                                        <div>
-                                                            <span className="font-medium text-gray-800">Project:</span>{' '}
-                                                            PRJ-{task.order_id}
-                                                        </div>
-                                                    </div>
+                                                <p className="text-sm text-gray-500 flex-shrink-0">
+                                                    Task ID: <span className="font-semibold text-gray-800">#{task.id}</span>
+                                                </p>
+                                            </div>
+
+                                            {/* 2. Product Name / Order ID Block (Highlighted) */}
+                                            <div className="mb-3">
+                                                <h3 className="text-xs font-medium text-gray-600 mb-1 flex items-center">
+                                                    <Package className="h-3 w-3 mr-1 text-blue-600" /> Project / Product Details:
+                                                </h3>
+                                                <div className="text-sm text-gray-700 p-2 bg-blue-50/70 border border-blue-200 rounded whitespace-pre-wrap max-h-20 overflow-y-auto">
+                                                    <p className="font-semibold text-base text-blue-800 mb-1">
+                                                        {productName}
+                                                    </p>
+                                                    <p className="text-xs text-blue-600">
+                                                        Order ID: {generatedOrderId || `PRJ-${task.order_id}`}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            
+                                            {/* 3. Metadata block (Condensed) */}
+                                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                                                
+                                                {/* Assigned To */}
+                                                <span className="flex items-center">
+                                                    <User className="h-3 w-3 mr-1 text-gray-400" />
+                                                    Assigned To: <span className="font-medium text-gray-800 ml-1">{task.assigned_to?.staff_name || "Unassigned"}</span>
+                                                    {task.assigned_to?.role && <span className="text-gray-500 ml-1">({task.assigned_to.role})</span>}
+                                                </span>
+
+                                                {/* Task Completion Due (MODIFIED for Overdue styling) */}
+                                                {task.completion_time && (
+                                                    <span className={`flex items-center font-medium ${isOverdue ? 'text-red-700 font-bold' : 'text-gray-600'}`}>
+                                                        <Hourglass className={`h-3 w-3 mr-1 ${isOverdue ? 'text-red-600' : 'text-gray-500'}`} />
+                                                        Due: {new Date(task.completion_time).toLocaleDateString()}
+                                                        {isOverdue && <Badge variant="destructive" className="ml-1 h-3 text-xs p-1">OVERDUE</Badge>}
+                                                    </span>
+                                                )}
+
+                                                {/* Actual Completion Date */}
+                                                {task.status === 'completed' && task.completed_on && (
+                                                    <span className="flex items-center text-green-700 font-medium">
+                                                        <CheckSquare className="h-3 w-3 mr-1 text-green-500" />
+                                                        Done: {new Date(task.completed_on).toLocaleDateString()}
+                                                    </span>
+                                                )}
+
+                                                {/* Project Target Completion Date */}
+                                                {projectCompletionDate && (
+                                                    <span className={`flex items-center ${targetClass}`}>
+                                                        <Calendar className={`h-3 w-3 mr-1 ${isTargetToday ? 'text-red-600' : 'text-gray-400'}`} />
+                                                        Project Due: {new Date(projectCompletionDate).toLocaleDateString()}
+                                                        {isTargetToday && <Badge variant="destructive" className="ml-1 h-3 text-xs p-1">PRJ DUE TODAY</Badge>}
+                                                    </span>
+                                                )}
+                                                
+                                                {/* Task Description Snippet */}
+                                                <div className="mt-2 w-full pt-2 border-t text-xs text-gray-500">
+                                                    <span className="font-semibold text-gray-700 mr-2">Task Description:</span>
+                                                    <span className="italic">{task.task_description?.substring(0, 100) || "No specific task note provided."}</span>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="w-full md:w-auto text-left md:text-right">
-                                            <Badge variant="secondary" className={`capitalize ${getTaskStatusColor(task.status)}`}>{task.status}</Badge>
-                                            <div className="flex justify-start md:justify-end space-x-2 mt-2">
+
+                                        {/* Status & Actions (Right side) */}
+                                        <div className="w-full sm:w-auto flex flex-col items-end gap-2 pt-3 sm:pt-0 border-t sm:border-t-0">
+                                            
+                                            {/* Status Badge */}
+                                            <Badge variant="secondary" className={`capitalize ${getTaskStatusColor(task.status)} text-xs`}>
+                                                {task.status}
+                                            </Badge>
+                                            
+                                            {/* Action Buttons */}
+                                            <div className="flex justify-start sm:justify-end space-x-2 mt-2">
                                                 <Button 
                                                     variant="outline" 
                                                     size="sm"
                                                     onClick={() => handleOpenEditModal(task)}
                                                 >
-                                                    <Edit className="h-3 w-3 mr-1" />Edit
+                                                <Edit className="h-3 w-3 mr-1" />Edit
                                                 </Button>
                                                 
                                                 <Button 
@@ -1048,7 +1117,7 @@ export function ProjectDashboard() {
                                                     size="sm"
                                                     onClick={() => handleViewProject({ id: task.order_id } as Order)}
                                                 >
-                                                    <Eye className="h-3 w-3 mr-1" />View Order
+                                                <Eye className="h-3 w-3 mr-1" />View Order
                                                 </Button>
                                             </div>
                                         </div>
@@ -1064,7 +1133,7 @@ export function ProjectDashboard() {
           </TabsContent>
 
 
-          {/* TIMELINE, RESOURCES, REPORTS tabs */}
+          {/* TIMELINE, RESOURCES, REPORTS tabs (Unchanged) */}
           <TabsContent value="timeline" className="space-y-6">
              <Card>
               <CardHeader>
@@ -1181,6 +1250,8 @@ export function ProjectDashboard() {
         onClose={() => setIsEditModalOpen(false)}
         onSuccess={handleEditSuccess}
         task={selectedTaskForEdit}
+        // Note: Staff list may be required here if the form allows reassignment
+        staffList={staff} 
       />
 
       {/* STATUS UPDATE DIALOG (Handles first time generated_order_id entry) */}
