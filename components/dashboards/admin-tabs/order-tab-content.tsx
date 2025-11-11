@@ -26,7 +26,9 @@ type OrderWithGeneratedId = Order & {
     amount?: number | null;
     completion_date?: string | null;
     created_by_staff_name?: string | null;
-    created_on?: string; 
+    created_on?: string;
+    // Assuming customer_name is present on the base Order type or included here implicitly
+    customer_name?: string | null;
 };
 
 const getProjectStatusColor = (status?: string | null) => {
@@ -311,6 +313,7 @@ export const ProjectManagementPage: React.FC<ProjectManagementProps> = ({
     
     const filteredOrders = useMemo(() => orders.filter(order =>
         (order.description && order.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (order.customer_name && order.customer_name.toLowerCase().includes(searchTerm.toLowerCase())) || // Added customer name to search
         (order.product_name && order.product_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (order.id && order.id.toString().includes(searchTerm)) ||
         (order.generated_order_id && order.generated_order_id.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -381,15 +384,18 @@ export const ProjectManagementPage: React.FC<ProjectManagementProps> = ({
                                 <div key={project.id} className="border rounded-lg p-4 transition-shadow hover:shadow-md bg-white">
                                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                         
-                                        {/* LEFT SIDE: Project ID, Customer, and Staff Info */}
+                                        {/* LEFT SIDE: Project ID, Customer Name, and Staff Info */}
                                         <div className="flex items-center space-x-4">
                                             <div className="w-12 h-12 bg-blue-100 rounded-full flex-shrink-0 flex items-center justify-center">
                                                 <FolderOpen className="h-6 w-6 text-blue-600" />
                                             </div>
                                             <div>
-                                                <h3 className="font-semibold text-lg">{project.description || `Project PRJ-${project.id}`}</h3>
+                                                {/* MODIFICATION: Display Customer Name here */}
+                                                <h3 className="font-semibold text-lg">
+                                                    {project.customer_name || `Project PRJ-${project.id}`}
+                                                </h3> 
                                                 <div className="flex items-center space-x-2">
-                                                    <p className="text-gray-600">Project ID: #{project.id}</p> {/* Renamed Order ID to Project ID */}
+                                                    <p className="text-gray-600">Project ID: #{project.id}</p>
                                                     {generatedIdDisplay}
                                                 </div>
                                                 <div className="text-xs text-gray-500 mt-1 space-y-1">
