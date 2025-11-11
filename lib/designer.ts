@@ -33,7 +33,18 @@ interface ApiResponse<T> {
   staff_name: string | null;
   role: string | null;
 }
+// 👇 New interface for customer details
+export interface CustomerInfo {
+  id: number | null;
+  name: string | null;
+}
 
+// 👇 New interface for order details
+export interface OrderInfo {
+  id: number | null;
+  generated_order_id: string | null;
+  product_name: string | null;
+}
  export interface DetailedTask {
   id: number;
   order_id: number;
@@ -44,8 +55,12 @@ interface ApiResponse<T> {
   completed_on: string | null; // ADDED: New field for completion date
   assigned_by: TaskStaffInfo;
   assigned_to: TaskStaffInfo;
+
   updated_by: TaskStaffInfo | null;
   order_completion_date?: string | null;
+  // 👇 NEW: customer info included in detailed task view
+  customer?: CustomerInfo | null;
+  order?: OrderInfo | null;
 }
 
 /**
