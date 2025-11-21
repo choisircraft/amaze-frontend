@@ -17,7 +17,7 @@ interface ApiResponse<T> {
  * Corresponds to the `DailySalesReport` Pydantic model.
  * Note: Dates and DateTimes are handled as ISO 8601 strings in TypeScript.
  */
-export interface DailySalesReport {
+ export interface DailySalesReport {
   id: number;
   total_sales_order?: number | null;
   total_sale_order_amount?: number | null;
@@ -38,15 +38,18 @@ export interface DailySalesReport {
   updated_by?: number | null;
   status?: string | null;
   created_on?: string | null; // ISO 8601 DateTime string
+  expense?: number | null;     // NEW
+  category?: string | null;    // NEW
 }
 
 /**
  * Payload for creating a new daily sales report.
  * Corresponds to the `DailySalesReportCreate` Pydantic model.
  */
-export interface DailySalesReportCreatePayload {
+ export interface DailySalesReportCreatePayload {
   total_sales_order: number;
   date: string; // YYYY-MM-DD
+
   total_sale_order_amount?: number | null;
   sale_order_collection?: number | null;
   sale_order_balance_amount?: number | null;
@@ -61,13 +64,16 @@ export interface DailySalesReportCreatePayload {
   amaze_ac?: number | null;
   cheque?: number | null;
   status?: string | null;
+
+  expense?: number | null;   // NEW
+  category?: string | null;  // NEW
 }
 
 /**
  * Payload for partially updating a daily sales report.
  * Corresponds to the `DailySalesReportBase` Pydantic model used in the PATCH endpoint.
  */
-export interface DailySalesReportUpdatePayload {
+ export interface DailySalesReportUpdatePayload {
   total_sales_order?: number;
   total_sale_order_amount?: number;
   sale_order_collection?: number;
@@ -84,6 +90,9 @@ export interface DailySalesReportUpdatePayload {
   cheque?: number;
   date?: string; // YYYY-MM-DD
   status?: string;
+
+  expense?: number;     // NEW
+  category?: string;    // NEW
 }
 
 // --- API Functions ---
