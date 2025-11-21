@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
 import { Toaster } from "@/components/ui/toaster";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,7 +24,20 @@ import {
     Calendar,
     ChevronDown,
     Info,
+    Filter,
+    X
 } from "lucide-react";
+
+// =============================================================
+// CONFIGURATION
+// =============================================================
+
+const EXPENSE_CATEGORIES = [
+    { value: 'crystal_wall_art', label: 'Crystal Wall Art' },
+    { value: 'amaze_ads', label: 'Amaze Ads' },
+    { value: 'crystal_glass_art', label: 'Crystal Glass Art' },
+    { value: 'sign_board_amaze', label: 'Sign Board Amaze' }
+];
 
 // =============================================================
 // TYPES & HELPERS
@@ -41,11 +55,13 @@ type DailyReportEntry = {
     totalDayCollection: number;
     totalCash: number;
     totalAC: number;
+    expense: number;
+    category: string;
     acDetails: AccountDetails;
 };
 
 // --- Helper Functions ---
-const formatINR = (amount: number) => {
+const formatRupee = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
         style: 'currency',
         currency: 'INR',
@@ -53,6 +69,12 @@ const formatINR = (amount: number) => {
         maximumFractionDigits: 2,
     }).format(amount);
 };
+
+const getCategoryLabel = (val: string | null) => {
+    if (!val) return 'N/A';
+    const found = EXPENSE_CATEGORIES.find(c => c.value === val);
+    return found ? found.label : val;
+}
 
 const mapApiToComponent = (apiReport: DailySalesReport): DailyReportEntry => {
     const displayDate = apiReport.date
@@ -69,6 +91,8 @@ const mapApiToComponent = (apiReport: DailySalesReport): DailyReportEntry => {
         totalDayCollection: apiReport.total_day_collection ?? 0,
         totalCash: apiReport.total_amount_on_cash ?? 0,
         totalAC: apiReport.total_amount_on_ac ?? 0,
+        expense: apiReport.expense ?? 0,
+        category: apiReport.category ?? '',
         acDetails: {
             IOB: apiReport.iob ?? 0, CD: apiReport.cd ?? 0, ANIL: apiReport.anil ?? 0, REMYA: apiReport.remya ?? 0,
             'RGB-186 SWIPING MACHINE': apiReport.rgb_186_swiping_machine ?? 0, 'AMAZE A/C': apiReport.amaze_ac ?? 0, CHEQUE: apiReport.cheque ?? 0,
@@ -86,23 +110,38 @@ interface DailyReportRegisterProps {
 }
 
 const DailyReportRegister = ({ reports, isLoading, onDelete }: DailyReportRegisterProps) => {
-    const sortedReports = useMemo(() => {
-        return [...reports].sort((a, b) => {
+    const [dateFilter, setDateFilter] = useState("");
+    const [categoryFilter, setCategoryFilter] = useState("");
+
+    const filteredReports = useMemo(() => {
+        let data = [...reports];
+        if (dateFilter) {
+            data = data.filter(r => r.date && r.date.startsWith(dateFilter));
+        }
+        if (categoryFilter) {
+            data = data.filter(r => r.category === categoryFilter);
+        }
+        return data.sort((a, b) => {
             const dateA = a.date ? new Date(a.date).getTime() : 0;
             const dateB = b.date ? new Date(b.date).getTime() : 0;
             return dateB - dateA; // Sort descending (newest first)
         });
-    }, [reports]);
+    }, [reports, dateFilter, categoryFilter]);
+
+    const clearFilters = () => {
+        setDateFilter("");
+        setCategoryFilter("");
+    };
 
     if (isLoading) {
         return (
             <div className="space-y-4">
-                {[...Array(5)].map((_, i) => (
+                {[...Array(3)].map((_, i) => (
                     <Card key={i}>
-                        <CardHeader className="py-3 px-4">
+                        <CardHeader className="py-2 px-4">
                             <Skeleton className="h-6 w-3/4" />
                         </CardHeader>
-                        <div className="px-4 py-3 border-t">
+                        <div className="px-4 py-2 border-t">
                             <Skeleton className="h-5 w-1/4" />
                         </div>
                     </Card>
@@ -112,82 +151,129 @@ const DailyReportRegister = ({ reports, isLoading, onDelete }: DailyReportRegist
     }
 
     return (
-        <div className="space-y-4">
-            {sortedReports.map((report) => {
+        <div className="space-y-2">
+            {/* Filter Bar */}
+            <div className="flex flex-col sm:flex-row gap-2 mb-2 p-2 bg-gray-50 rounded-md border">
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <Filter className="w-4 h-4 text-gray-500" />
+                    <span className="text-xs font-medium text-gray-600">Filters:</span>
+                </div>
+                <div className="flex gap-2 w-full sm:w-auto flex-1">
+                    <Input 
+                        type="date" 
+                        value={dateFilter} 
+                        onChange={(e) => setDateFilter(e.target.value)} 
+                        className="h-7 text-xs w-full sm:w-36 bg-white" 
+                    />
+                    <select 
+                        value={categoryFilter} 
+                        onChange={(e) => setCategoryFilter(e.target.value)}
+                        className="h-7 text-xs w-full sm:w-40 rounded-md border border-input bg-white px-3 py-1 focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                        <option value="">All Categories</option>
+                        {EXPENSE_CATEGORIES.map((cat) => (
+                            <option key={cat.value} value={cat.value}>{cat.label}</option>
+                        ))}
+                    </select>
+                </div>
+                {(dateFilter || categoryFilter) && (
+                    <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 text-xs px-2 hover:bg-gray-200 text-red-600">
+                        <X className="w-3 h-3 mr-1" /> Clear
+                    </Button>
+                )}
+            </div>
+
+            {/* List */}
+            {filteredReports.map((report) => {
                 const displayReport = mapApiToComponent(report);
-                // Filter out account details with a zero amount to avoid clutter
-                const activeAcDetails = Object.entries(displayReport.acDetails)
-                                              .filter(([, amount]) => amount > 0);
+                const categoryLabel = getCategoryLabel(displayReport.category);
 
                 return (
-                    <Card key={report.id}>
-                        <CardHeader className="py-3 px-4 border-b">
-                            <div className="flex justify-between items-center gap-2">
-                                <CardTitle className="text-lg font-bold text-gray-800 flex items-center">
-                                    <Calendar className="w-5 h-5 mr-3 text-blue-600" />
-                                    Report Date: {displayReport.date}
-                                </CardTitle>
-                                <div className="flex items-center gap-2 flex-shrink-0">
-                                    <Badge className="bg-green-600 hover:bg-green-700 hidden sm:block">
-                                        Total Collection: {formatINR(displayReport.totalDayCollection)}
-                                    </Badge>
-                                    <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => onDelete(report.id)}>
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <Collapsible>
-                            <CollapsibleTrigger asChild>
-                                <Button variant="ghost" className="w-full justify-between px-4 py-2 text-sm font-medium">
-                                    <span>View Details</span>
-                                    <ChevronDown className="h-4 w-4" />
-                                </Button>
-                            </CollapsibleTrigger>
-                            <CollapsibleContent className="p-4 border-t space-y-6">
-                                {/* --- Section 1: Sale Order Summary --- */}
-                                <div>
-                                    <h4 className="font-semibold text-md mb-3 border-b pb-1">Sale Order Summary</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                        <div><span className="text-gray-500">Total Orders:</span> <p className="font-medium">{displayReport.totalSaleOrder} NO'S</p></div>
-                                        <div><span className="text-gray-500">Order Amount:</span> <p className="font-medium">{formatINR(displayReport.totalSaleOrderAmount)}</p></div>
-                                        <div><span className="text-gray-500">Order Collected:</span> <p className="font-medium text-green-700">{formatINR(displayReport.saleOrderCollection)}</p></div>
-                                        <div><span className="text-gray-500">Order Balance:</span> <p className="font-medium text-red-600">{formatINR(displayReport.saleOrderBalAmount)}</p></div>
+                    <Card key={report.id} className="shadow-sm">
+                        <CardHeader className="py-1 px-3 border-b bg-white">
+                            <Collapsible className="group/collapsible"> 
+                                <div className="flex justify-between items-center gap-2">
+                                    {/* Left: Date & Category */}
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <div className="flex items-center">
+                                            <Calendar className="w-4 h-4 mr-2 text-blue-600" />
+                                            <span className="text-sm font-bold text-gray-800">{displayReport.date}</span>
+                                        </div>
+                                        {displayReport.category && (
+                                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-normal border-gray-200 bg-gray-100 text-gray-600">
+                                                {categoryLabel}
+                                            </Badge>
+                                        )}
+                                    </div>
+
+                                    {/* Right: Actions & Toggle */}
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                        {/* Order Count Badge */}
+                                        <Badge variant="outline" className="hidden sm:flex text-[10px] px-2 h-5 border-blue-200 text-blue-700 bg-blue-50">
+                                            Orders: {displayReport.totalSaleOrder}
+                                        </Badge>
+
+                                        <Badge className="bg-green-600 hover:bg-green-700 hidden sm:flex text-[10px] px-2 h-5">
+                                            Total: {formatRupee(displayReport.totalDayCollection)}
+                                        </Badge>
+                                        
+                                        {/* View Details Button */}
+                                        <CollapsibleTrigger asChild>
+                                            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 px-2 hover:bg-gray-100 text-gray-600 hover:text-gray-900 [&[data-state=open]>svg]:rotate-180">
+                                                <span className="hidden sm:inline">View Details</span>
+                                                <span className="sm:hidden">Details</span>
+                                                <ChevronDown className="h-3 w-3 transition-transform duration-200" />
+                                            </Button>
+                                        </CollapsibleTrigger>
+
+                                        <Button variant="destructive" size="icon" className="h-7 w-7" onClick={() => onDelete(report.id)}>
+                                            <Trash2 className="h-3 w-3" />
+                                        </Button>
                                     </div>
                                 </div>
                                 
-                                {/* --- Section 2: Cash Book Breakdown --- */}
-                                <div>
-                                    <h4 className="font-semibold text-md mb-3 border-b pb-1">Cash Book Breakdown</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                                        <div><span className="text-gray-500">Total Cash:</span> <p className="font-medium">{formatINR(displayReport.totalCash)}</p></div>
-                                        <div><span className="text-gray-500">Total A/C:</span> <p className="font-medium">{formatINR(displayReport.totalAC)}</p></div>
+                                <CollapsibleContent className="p-3 border-t bg-gray-50/30 mt-1">
+                                    {/* --- Section 1: Sale Order Summary --- */}
+                                    <h4 className="font-semibold text-xs mb-2 border-b pb-1 text-gray-700">Sale Order Summary</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                                        <div><span className="text-gray-500 block">Total Orders:</span> <span className="font-medium">{displayReport.totalSaleOrder} NO'S</span></div>
+                                        <div><span className="text-gray-500 block">Order Amount:</span> <span className="font-medium">{formatRupee(displayReport.totalSaleOrderAmount)}</span></div>
+                                        <div><span className="text-gray-500 block">Order Collected:</span> <span className="font-medium text-green-700">{formatRupee(displayReport.saleOrderCollection)}</span></div>
+                                        <div><span className="text-gray-500 block">Order Balance:</span> <span className="font-medium text-red-600">{formatRupee(displayReport.saleOrderBalAmount)}</span></div>
                                     </div>
-                                </div>
-
-                                {/* --- Section 3: A/C Specifics --- */}
-                                {activeAcDetails.length > 0 && (
-                                    <div>
-                                        <h5 className="font-semibold text-sm mb-2">A/C Specifics (Online Work)</h5>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-xs bg-gray-50 p-3 rounded">
-                                            {activeAcDetails.map(([key, amount]) => (
-                                                <div key={key}>
-                                                    <span className="text-gray-600">{key}:</span> 
-                                                    <p className="font-medium">{formatINR(amount)}</p>
-                                                </div>
-                                            ))}
-                                        </div>
+                                    
+                                    {/* --- Section 2: Cash Book Breakdown --- */}
+                                    <h4 className="font-semibold text-xs mt-3 mb-2 border-b pb-1 flex items-center justify-between text-gray-700">
+                                        <span>Cash Book Breakdown</span>
+                                    </h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                                        <div><span className="text-gray-500 block">Total Cash:</span> <span className="font-medium">{formatRupee(displayReport.totalCash)}</span></div>
+                                        <div><span className="text-gray-500 block">Total A/C:</span> <span className="font-medium">{formatRupee(displayReport.totalAC)}</span></div>
+                                        <div className="bg-red-50 p-1 rounded border border-red-100"><span className="text-gray-500 block">Expenses:</span> <span className="font-medium text-red-600">{formatRupee(displayReport.expense)}</span></div>
                                     </div>
-                                )}
-                            </CollapsibleContent>
-                        </Collapsible>
+                                    
+                                    {/* --- Section 3: A/C Specifics --- */}
+                                    <h5 className="font-semibold text-[10px] uppercase text-gray-400 mt-3 mb-1">A/C Specifics</h5>
+                                    <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-[10px] bg-white border p-2 rounded">
+                                        {Object.entries(displayReport.acDetails)
+                                            .filter(([, amount]) => amount > 0)
+                                            .map(([key, amount]) => (
+                                            <div key={key}>
+                                                <span className="text-gray-500 block truncate" title={key}>{key}</span> 
+                                                <span className="font-medium">{formatRupee(amount)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CollapsibleContent>
+                            </Collapsible>
+                        </CardHeader>
                     </Card>
                 )
             })}
-            {!isLoading && reports.length === 0 && (
-                <div className="text-center py-10">
-                    <Info className="h-10 w-10 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-500">No financial reports found.</p>
+            {!isLoading && filteredReports.length === 0 && (
+                <div className="text-center py-8 border border-dashed rounded-md">
+                    <Info className="h-8 w-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-xs text-gray-400">No financial reports found matching your filters.</p>
                 </div>
             )}
         </div>
@@ -237,7 +323,7 @@ export const AdminFinancialsPage = () => {
                 <CardHeader>
                     <CardTitle className="flex items-center">
                         <ListOrdered className="h-5 w-5 mr-2 text-green-600" />
-                        Historical Daily Financial Reports
+                        Daily Financial Reports
                     </CardTitle>
                     <CardDescription>
                         Review or delete previously submitted end-of-day financial summaries.
