@@ -32,7 +32,7 @@ import {
   type StaffUser
 } from "@/lib/sales"
 
-// --- DEFINING THE ENHANCED ORDER TYPE (Must stay here for state typing) ---
+// --- DEFINING THE ENHANCED ORDER TYPE ---
 export interface OrderById {
   id: number
   customer_id: number
@@ -56,7 +56,7 @@ export interface OrderById {
   address?: string
 }
 
-// --- Helper Data and Functions (Kept for central access and memoization logic) ---
+// --- Helper Data and Functions ---
 const LEAD_STATUSES = ['cold', 'warm', 'hot', 'converted', 'lost']
 const ORDER_STATUSES = ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled']
 
@@ -110,7 +110,7 @@ const getOrderStatusColor = (status: string) => {
 }
 
 export function SalesDashboard() {
-  // === 1. CORE STATE (All centralized here) ===
+  // === 1. CORE STATE ===
   const [customers, setCustomers] = useState<Customer[]>([])
   const [orders, setOrders] = useState<Order[]>([])
   const [realCustomers, setRealCustomers] = useState<RealCustomer[]>([])
@@ -219,7 +219,7 @@ export function SalesDashboard() {
     }
   }
 
-  // === 3. HANDLERS (All centralized here) ===
+  // === 3. HANDLERS ===
   const handleViewLead = (lead: Customer) => { setViewingLead(lead) }
   const handleAddCustomer = () => { setEditingItem(null); setEditingEntityType('lead'); setFormMode('create'); setIsCustomerFormOpen(true); }
   const handleEditCustomer = (customer: Customer) => { setEditingItem(customer); setEditingEntityType('lead'); setFormMode('edit'); setIsCustomerFormOpen(true); }
@@ -256,7 +256,7 @@ export function SalesDashboard() {
   };
 
 
-  // === 4. MEMOIZED FILTERED DATA (Must stay here) ===
+  // === 4. MEMOIZED FILTERED DATA ===
   const filteredCustomers = useMemo(() => {
     return customers
       .filter(customer =>
@@ -333,14 +333,45 @@ export function SalesDashboard() {
   return (
     <DashboardLayout title="Sales Dashboard" role="sales">
       <main className="flex-1 space-y-6 p-4 md:p-6 overflow-y-auto">
-        <Tabs defaultValue="leads" className="space-y-6">
+        {/* UPDATED: defaultValue changed to "orders" */}
+        <Tabs defaultValue="orders" className="space-y-6">
           <TabsList className="grid w-full grid-cols-2 md:grid-cols-5">
-            <TabsTrigger value="leads" className="data-[state=active]:bg-black data-[state=active]:text-white">Leads</TabsTrigger>
+            {/* UPDATED: Reordered triggers so Orders is first visually */}
             <TabsTrigger value="orders" className="data-[state=active]:bg-black data-[state=active]:text-white">Orders</TabsTrigger>
+            <TabsTrigger value="leads" className="data-[state=active]:bg-black data-[state=active]:text-white">Leads</TabsTrigger>
             <TabsTrigger value="customers" className="data-[state=active]:bg-black data-[state=active]:text-white">Customers</TabsTrigger>
             <TabsTrigger value="activities" className="data-[state=active]:bg-black data-[state=active]:text-white">Activities</TabsTrigger>
             <TabsTrigger value="reports" className="data-[state=active]:bg-black data-[state=active]:text-white">Reports</TabsTrigger>
           </TabsList>
+
+          {/* UPDATED: Moved Orders content to top (optional but good for organization) */}
+          <TabsContent value="orders" className="space-y-6">
+            <SalesOrdersTab
+              error={error}
+              isOrdersLoading={isOrdersLoading}
+              orderSearchTerm={orderSearchTerm}
+              setOrderSearchTerm={setOrderSearchTerm}
+              orderStaffFilterName={orderStaffFilterName}
+              setOrderStaffFilterName={setOrderStaffFilterName}
+              orderStatusFilter={orderStatusFilter}
+              setOrderStatusFilter={setOrderStatusFilter}
+              orderFromDate={orderFromDate}
+              setOrderFromDate={setOrderFromDate}
+              orderToDate={orderToDate}
+              setOrderToDate={setOrderToDate}
+              staffs={staffs}
+              isStaffLoading={isStaffLoading}
+              filteredOrders={filteredOrders}
+              ORDER_STATUSES={ORDER_STATUSES}
+              customers={customers}
+              realCustomers={realCustomers}
+              handleViewOrder={handleViewOrder}
+              handleEditOrder={handleEditOrder}
+              handleDeleteOrder={handleDeleteOrder}
+              getOrderStatusColor={getOrderStatusColor}
+              handleMakeNewOrder={handleMakeNewOrder} 
+            />
+          </TabsContent>
 
           <TabsContent value="leads" className="space-y-6">
             <SalesLeadsTab
@@ -366,33 +397,6 @@ export function SalesDashboard() {
               handleConvertToOrder={handleConvertToOrder}
               handleDeleteCustomer={handleDeleteCustomer}
               getStatusColor={getStatusColor}
-            />
-          </TabsContent>
-
-          <TabsContent value="orders" className="space-y-6">
-            <SalesOrdersTab
-              error={error}
-              isOrdersLoading={isOrdersLoading}
-              orderSearchTerm={orderSearchTerm}
-              setOrderSearchTerm={setOrderSearchTerm}
-              orderStaffFilterName={orderStaffFilterName}
-              setOrderStaffFilterName={setOrderStaffFilterName}
-              orderStatusFilter={orderStatusFilter}
-              setOrderStatusFilter={setOrderStatusFilter}
-              orderFromDate={orderFromDate}
-              setOrderFromDate={setOrderFromDate}
-              orderToDate={orderToDate}
-              setOrderToDate={setOrderToDate}
-              staffs={staffs}
-              isStaffLoading={isStaffLoading}
-              filteredOrders={filteredOrders}
-              ORDER_STATUSES={ORDER_STATUSES}
-              customers={customers}
-              realCustomers={realCustomers}
-              handleViewOrder={handleViewOrder}
-              handleEditOrder={handleEditOrder}
-              handleDeleteOrder={handleDeleteOrder}
-              getOrderStatusColor={getOrderStatusColor}
             />
           </TabsContent>
 
