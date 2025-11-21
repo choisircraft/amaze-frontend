@@ -10,29 +10,24 @@ import {
     AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
 } from "@/components/ui/alert-dialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Search, ShoppingCart, Edit, Trash2, IndianRupee, Calendar, Package, SlidersHorizontal, Image as ImageIcon, Upload, X } from "lucide-react"
+import { Search, ShoppingCart, Edit, Trash2, IndianRupee, Calendar, Package, SlidersHorizontal, Image as ImageIcon, Upload, X, Plus } from "lucide-react"
 import { type Order, type Customer, type RealCustomer, type StaffUser } from "@/lib/api"
 // Assuming your API functions and types are correctly exported from the path below
 import { 
-    type OrderImage as ApiOrderImage, // Renamed to avoid conflict with local type
+    type OrderImage as ApiOrderImage, 
     getOrderImages, 
     uploadOrderImage, 
-    // IMPORTANT: Your deleteOrderImage function signature should be updated to accept a public_id.
-    // e.g., deleteOrderImage(imageId: number, publicId: string)
     deleteOrderImage 
-} from '@/lib/crm'; // Adjust path as necessary (e.g., '@/lib/crm' or similar)
+} from '@/lib/crm'; 
 
-// NOTE FOR IMPLEMENTER: 
-// To delete images from Cloudinary, your API must provide the Cloudinary `public_id`.
-// This local type definition is updated to reflect that. Ensure your main `OrderImage`
-// type in `@/lib/crm` also includes the `public_id` field.
+// NOTE: Ensure your main OrderImage type in @/lib/crm includes public_id
 type OrderImage = ApiOrderImage & {
     public_id: string;
 };
 
 
 // -------------------------------------------------------------
-// OrdersTabProps Interface (Unchanged)
+// OrdersTabProps Interface
 // -------------------------------------------------------------
 interface OrdersTabProps {
     error: string
@@ -53,9 +48,13 @@ interface OrdersTabProps {
     ORDER_STATUSES: string[]
     customers: Customer[]
     realCustomers: RealCustomer[]
+    
+    // Actions
+    handleCreateOrder: () => void
     handleViewOrder: (order: Order) => void
     handleEditOrder: (order: Order) => void
     handleDeleteOrder: (id: number) => void
+    
     getOrderStatusColor: (status: string) => string
 }
 
@@ -83,9 +82,8 @@ const OrderImageManagerDialog: React.FC<ImageManagerProps> = ({ order, onClose }
         setIsLoading(true);
         setError('');
         try {
-            // INTEGRATED API CALL
             const fetchedImages = await getOrderImages(orderId); 
-            setImages(fetchedImages as OrderImage[]); // Cast to ensure public_id is expected
+            setImages(fetchedImages as OrderImage[]); 
         } catch (err) {
             setError(`Failed to load images: ${err instanceof Error ? err.message : 'Unknown error'}`);
             console.error(err);
@@ -108,15 +106,11 @@ const OrderImageManagerDialog: React.FC<ImageManagerProps> = ({ order, onClose }
         setIsUploading(true);
         setError('');
         try {
-            // INTEGRATED API CALL
             const newImage = await uploadOrderImage(orderId, uploadFile, uploadDescription); 
-            
             setImages(prev => [...prev, newImage as OrderImage]); 
 
-            // Reset upload state
             setUploadFile(null);
             setUploadDescription('');
-            // Clear file input visually
             const fileInput = (document.getElementById('image-file-input') as HTMLInputElement);
             if (fileInput) fileInput.value = ''; 
 
@@ -128,16 +122,12 @@ const OrderImageManagerDialog: React.FC<ImageManagerProps> = ({ order, onClose }
         }
     };
 
-    // --- Delete Handler (MODIFIED) ---
-    // Now accepts the full image object to access its public_id for Cloudinary deletion.
+    // --- Delete Handler ---
     const handleDelete = async (imageToDelete: OrderImage) => {
         setIsLoading(true); 
         setError('');
         try {
-            // INTEGRATED API CALL (MODIFIED)
-            // We now pass both the database ID and the Cloudinary public_id.
             await deleteOrderImage(imageToDelete.id, imageToDelete.public_id); 
-            
             setImages(prev => prev.filter(img => img.id !== imageToDelete.id));
         } catch (err) {
             setError(`Deletion failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -194,7 +184,7 @@ const OrderImageManagerDialog: React.FC<ImageManagerProps> = ({ order, onClose }
                 <div className="mt-6">
                     <h4 className="font-semibold mb-3">Existing Images ({images.length})</h4>
 
-                    {isLoading && images.length === 0 ? ( // Show loader only on initial load
+                    {isLoading && images.length === 0 ? ( 
                         <div className="text-center py-8">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                             <p className="mt-2 text-sm text-gray-500">Loading images...</p>
@@ -222,7 +212,7 @@ const OrderImageManagerDialog: React.FC<ImageManagerProps> = ({ order, onClose }
                                                 variant="destructive" 
                                                 size="icon" 
                                                 className="absolute top-2 right-2 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                disabled={isLoading} // Disable delete button while another operation is in progress
+                                                disabled={isLoading} 
                                             >
                                                 <X className="h-4 w-4" />
                                             </Button>
@@ -236,7 +226,6 @@ const OrderImageManagerDialog: React.FC<ImageManagerProps> = ({ order, onClose }
                                             </AlertDialogHeader>
                                             <AlertDialogFooter>
                                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                {/* MODIFIED: Pass the full 'img' object to the handler */}
                                                 <AlertDialogAction onClick={() => handleDelete(img)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
                                             </AlertDialogFooter>
                                         </AlertDialogContent>
@@ -257,7 +246,7 @@ const OrderImageManagerDialog: React.FC<ImageManagerProps> = ({ order, onClose }
 
 
 // -------------------------------------------------------------
-// Main OrdersTab Component - UPDATED
+// Main OrdersTab Component
 // -------------------------------------------------------------
 
 export const OrdersTab: React.FC<OrdersTabProps> = ({
@@ -279,6 +268,7 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
     ORDER_STATUSES,
     customers,
     realCustomers,
+    handleCreateOrder,
     handleViewOrder,
     handleEditOrder,
     handleDeleteOrder,
@@ -346,6 +336,15 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                             <CardTitle className="flex items-center"><ShoppingCart className="h-5 w-5 mr-2" />Order Management</CardTitle>
                             <CardDescription>Manage customer orders and track project progress</CardDescription>
                         </div>
+                        
+                        {/* NEW BUTTON: Create Order */}
+                        <Button 
+                            onClick={handleCreateOrder} 
+                            className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white"
+                        >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create Order
+                        </Button>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -405,27 +404,21 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                                         <div key={order.id} className="border rounded-lg p-4 transition-shadow hover:shadow-md bg-white">
                                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                                 
-                                                {/* LEFT SIDE: Customer Name and Order ID Info (UPDATED SECTION) */}
+                                                {/* LEFT SIDE: Customer Name and Order ID Info */}
                                                 <div className="flex items-center space-x-4">
                                                     <div className="w-12 h-12 bg-green-100 rounded-full flex-shrink-0 flex items-center justify-center"><ShoppingCart className="h-6 w-6 text-green-600" /></div>
                                                     <div>
-                                                        {/* Highlighted: Customer Name */}
                                                         <h3 className="font-bold text-lg text-gray-900">
                                                             {customer?.customer_name || 'Unknown Customer'}
                                                         </h3>
-                                                        
-                                                        {/* Smaller Order ID and Generated ID */}
                                                         <p className="text-sm text-gray-600 mt-0.5">
                                                             Order ID: <span className="font-mono text-xs text-gray-700">#{order.id}</span>
-                                                            
-                                                            {/* Assuming the "generated ID" is stored in a field like 'reference_id' */}
                                                             {('reference_id' in order && order.reference_id) && (
                                                                 <span className="ml-3 text-blue-700 font-semibold text-xs md:text-sm">
                                                                     Code: {order.reference_id}
                                                                 </span>
                                                             )}
                                                         </p>
-
                                                         <div className="text-xs text-gray-500 mt-1 space-y-1">
                                                             <p>Created by {order.created_by_staff_name || 'Staff'} on {new Date(order.created_on).toLocaleDateString()}</p>
                                                         </div>
@@ -498,21 +491,24 @@ export const OrdersTab: React.FC<OrdersTabProps> = ({
                                                         )}
                                                         {/* End Conditional Edit Button */}
 
-                                                        <AlertDialog>
-                                                            <AlertDialogTrigger asChild>
-                                                                <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700"><Trash2 className="h-3 w-3 mr-1" />Delete</Button>
-                                                            </AlertDialogTrigger>
-                                                            <AlertDialogContent>
-                                                                <AlertDialogHeader>
-                                                                    <AlertDialogTitle>Delete Order</AlertDialogTitle>
-                                                                    <AlertDialogDescription>Are you sure you want to delete Order #{order.id}?</AlertDialogDescription>
-                                                                </AlertDialogHeader>
-                                                                <AlertDialogFooter>
-                                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                                    <AlertDialogAction onClick={() => handleDeleteOrder(order.id)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
-                                                                </AlertDialogFooter>
-                                                            </AlertDialogContent>
-                                                        </AlertDialog>
+                                                        {/* Conditional Delete Button - ONLY SHOW IF PENDING */}
+                                                        {order.status === 'pending' && (
+                                                            <AlertDialog>
+                                                                <AlertDialogTrigger asChild>
+                                                                    <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700"><Trash2 className="h-3 w-3 mr-1" />Delete</Button>
+                                                                </AlertDialogTrigger>
+                                                                <AlertDialogContent>
+                                                                    <AlertDialogHeader>
+                                                                        <AlertDialogTitle>Delete Order</AlertDialogTitle>
+                                                                        <AlertDialogDescription>Are you sure you want to delete Order #{order.id}?</AlertDialogDescription>
+                                                                    </AlertDialogHeader>
+                                                                    <AlertDialogFooter>
+                                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                        <AlertDialogAction onClick={() => handleDeleteOrder(order.id)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+                                                                    </AlertDialogFooter>
+                                                                </AlertDialogContent>
+                                                            </AlertDialog>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
