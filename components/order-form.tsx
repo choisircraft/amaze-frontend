@@ -21,6 +21,9 @@ import {
   Tag,
   FileText as ProductIcon,
   CheckCircle,
+  Phone,
+  MessageSquare,
+  LayoutGrid // Added for Category Icon
 } from "lucide-react"
 import { type Order, type CreateOrderRequest, type UpdateOrderRequest, type Customer } from "@/lib/api"
 
@@ -33,9 +36,12 @@ interface OrderFormProps {
   customer?: Customer | null
 }
 
-// Extended form data type to include all backend fields
+// Extended form data type to include all backend fields + manual customer entry fields
 type FormDataType = CreateOrderRequest & UpdateOrderRequest & {
   total_amount?: number
+  customer_name?: string
+  mobile_number?: string
+  whatsapp_number?: string
 }
 
 export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }: OrderFormProps) {
@@ -55,17 +61,20 @@ export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }:
     payment_method: '',
     delivery_type: '',
     delivery_address: '',
-    // NEW BACKEND FIELDS
     product_name: '',
     additional_amount: 0,
     total_amount: 0,
     account_name: '',
+    customer_name: '',
+    mobile_number: '',
+    whatsapp_number: ''
   })
   
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Safe number conversion function
+  const isExistingCustomer = !!(customer && customer.id);
+
   const safeNumber = (value: any): number => {
     if (typeof value === 'number' && !isNaN(value)) return value
     if (typeof value === 'string' && value.trim() !== '') {
@@ -75,13 +84,11 @@ export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }:
     return 0
   }
 
-  // Safe number formatting for display
   const formatCurrency = (value: any): string => {
     const num = safeNumber(value)
     return num.toFixed(2)
   }
 
-  // Auto-calculate total_amount
   useEffect(() => {
     const baseAmount = safeNumber(formData.amount)
     const additional = safeNumber(formData.additional_amount)
@@ -93,7 +100,6 @@ export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }:
     }))
   }, [formData.amount, formData.additional_amount])
 
-  // Proper form initialization
   useEffect(() => {
     if (isOpen) {
       if (mode === 'edit' && order) {
@@ -119,20 +125,22 @@ export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }:
           payment_method: order.payment_method || '',
           delivery_type: order.delivery_type || '',
           delivery_address: order.delivery_address || '',
-          // NEW BACKEND FIELDS with safe number handling
           product_name: order.product_name || '',
           additional_amount: safeAdditional,
           total_amount: calculatedTotal,
           account_name: order.account_name || '',
+          customer_name: '',
+          mobile_number: '',
+          whatsapp_number: ''
         })
-      } else if (mode === 'create' && customer) {
+      } else if (mode === 'create' && customer && customer.id) {
         setFormData({
           customer_id: customer.id,
           category: '',
           project_commit: '',
           start_on: '',
           completion_date: '',
-          status: 'pending', // Default status for creation
+          status: 'pending',
           amount: 0,
           description: '',
           order_type: '',
@@ -142,27 +150,45 @@ export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }:
           payment_method: '',
           delivery_type: '',
           delivery_address: customer.address || '',
-          // NEW BACKEND FIELDS
           product_name: '',
           additional_amount: 0,
           total_amount: 0,
           account_name: '',
+          customer_name: '',
+          mobile_number: '',
+          whatsapp_number: ''
         })
-      } else if (mode === 'create' && !customer) {
-        // Handle create without customer (fallback)
-        setFormData(prev => ({
-          ...prev,
+      } else {
+        setFormData({
           customer_id: 0,
+          category: '',
+          project_commit: '',
+          start_on: '',
+          completion_date: '',
           status: 'pending',
-          payment_status: 'pending'
-        }))
+          amount: 0,
+          description: '',
+          order_type: '',
+          quantity: 0,
+          payment_status: 'pending',
+          amount_payed: 0,
+          payment_method: '',
+          delivery_type: '',
+          delivery_address: '',
+          product_name: '',
+          additional_amount: 0,
+          total_amount: 0,
+          account_name: '',
+          customer_name: '',
+          mobile_number: '',
+          whatsapp_number: ''
+        })
       }
       setError('')
     }
   }, [isOpen, mode, order, customer])
 
   const handleInputChange = (field: keyof FormDataType, value: string | number | null) => {
-    // Safe number handling for numeric fields
     if (['amount', 'quantity', 'amount_payed', 'additional_amount', 'total_amount'].includes(field)) {
       setFormData(prev => ({ 
         ...prev, 
@@ -181,8 +207,7 @@ export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }:
     try {
       const { ApiClient } = await import('@/lib/api')
       
-      // Prepare data for API - only include fields that are actually set
-      const submitData: CreateOrderRequest & UpdateOrderRequest = {
+      const submitData: any = {
         customer_id: formData.customer_id,
         category: formData.category?.trim() || undefined,
         project_commit: formData.project_commit?.trim() || undefined,
@@ -192,7 +217,6 @@ export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }:
         status: formData.status?.trim() || undefined,
         amount: safeNumber(formData.amount) || undefined,
         description: formData.description?.trim() || undefined,
-        // Core new fields
         order_type: formData.order_type?.trim() || undefined,
         quantity: safeNumber(formData.quantity) || undefined,
         payment_status: formData.payment_status?.trim() || undefined,
@@ -200,7 +224,6 @@ export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }:
         payment_method: formData.payment_method?.trim() || undefined,
         delivery_type: formData.delivery_type?.trim() || undefined,
         delivery_address: formData.delivery_address?.trim() || undefined,
-        // NEW BACKEND FIELDS
         product_name: formData.product_name?.trim() || undefined,
         additional_amount: safeNumber(formData.additional_amount) || undefined,
         total_amount: safeNumber(formData.total_amount) || undefined,
@@ -208,8 +231,14 @@ export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }:
       }
       
       if (mode === 'create') {
-        if (!submitData.customer_id || !submitData.order_type || !submitData.product_name || !submitData.amount) {
-          throw new Error('Please fill all required fields')
+        if (formData.customer_id === 0) {
+             submitData.customer_name = formData.customer_name;
+             submitData.mobile_number = formData.mobile_number;
+             submitData.whatsapp_number = formData.whatsapp_number;
+        }
+
+        if ((!submitData.customer_id && !submitData.customer_name) || !submitData.order_type || !submitData.product_name || !submitData.amount) {
+          throw new Error('Please fill all required fields (Customer Name, Mobile, Product Name, Order Type, Amount)')
         }
         await ApiClient.createOrder(submitData as CreateOrderRequest)
       } else if (mode === 'edit' && order) {
@@ -225,7 +254,7 @@ export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }:
     }
   }
 
-  // === UI Options Definitions ===
+  // === UI Options ===
   const categoryOptions = [
     { value: 'crystal_wall_art', label: 'Crystal Wall Art' },
     { value: 'amaze_ads', label: 'Amaze Ads' },
@@ -270,7 +299,6 @@ export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }:
     { value: 'cd', label: 'CD' },
   ]
 
-  // Full status list (used internally for finding the correct object)
   const allStatusOptions = [
       { value: 'pending', label: 'Pending', color: 'text-yellow-600' },
       { value: 'confirmed', label: 'Confirmed', color: 'text-blue-600' },
@@ -279,37 +307,27 @@ export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }:
       { value: 'cancelled', label: 'Cancelled', color: 'text-red-600' },
   ]
 
-  // --- MODIFIED STATUS LOGIC: Pending and Confirmed only ---
   const restrictedValues = ['pending', 'confirmed'];
   let statusOptions = allStatusOptions.filter(opt => restrictedValues.includes(opt.value));
-
   if (mode === 'edit' && order && !restrictedValues.includes(order.status)) {
-      // If editing an order that is already in an advanced status (e.g., 'completed'), 
-      // include that status object so the current value is displayed correctly in the Select input.
       const currentStatusObject = allStatusOptions.find(opt => opt.value === order.status);
-      if (currentStatusObject) {
-          // Prepend the current advanced status
-          statusOptions = [currentStatusObject, ...statusOptions];
-      }
+      if (currentStatusObject) statusOptions = [currentStatusObject, ...statusOptions];
   }
-  statusOptions = statusOptions.filter((v, i, a) => a.findIndex(t => (t.value === v.value)) === i); // Deduplicate
+  statusOptions = statusOptions.filter((v, i, a) => a.findIndex(t => (t.value === v.value)) === i); 
 
-  // Validation check
-  const isFormValid = formData.customer_id > 0 && 
-    !!formData.order_type && 
-    !!formData.product_name && 
-    safeNumber(formData.amount) > 0
+  const hasCustomer = formData.customer_id > 0 || (!!formData.customer_name && !!formData.mobile_number);
+  const isFormValid = hasCustomer && !!formData.order_type && !!formData.product_name && safeNumber(formData.amount) > 0
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-5xl max-h-[95vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>
-            {mode === 'create' ? 'Create Order from Lead' : `Edit Order #${order?.id}`}
+            {mode === 'create' ? 'Create New Order' : `Edit Order #${order?.id}`}
           </DialogTitle>
           <DialogDescription>
             {mode === 'create' 
-              ? `Create an order for ${customer?.customer_name || 'this lead'}.`
+              ? isExistingCustomer ? `Create an order for ${customer?.customer_name}.` : 'Enter customer and order details below.'
               : 'Update the order information below.'
             }
           </DialogDescription>
@@ -317,31 +335,38 @@ export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }:
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Customer Info Section */}
-          {customer && (
+          {isExistingCustomer ? (
             <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
               <div className="flex items-center mb-3">
                 <User className="h-4 w-4 mr-2 text-blue-600" />
                 <h4 className="font-semibold text-blue-800">Customer Information</h4>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                <div>
-                  <span className="font-medium text-gray-700">Name:</span>
-                  <p className="text-gray-900 ml-1">{customer.customer_name}</p>
+                <div><span className="font-medium text-gray-700">Name:</span><p className="text-gray-900 ml-1">{customer?.customer_name}</p></div>
+                <div><span className="font-medium text-gray-700">Mobile:</span><p className="text-gray-900 ml-1">{customer?.mobile_number}</p></div>
+                <div><span className="font-medium text-gray-700">WhatsApp:</span><p className="text-gray-900 ml-1">{customer?.whatsapp_number || 'N/A'}</p></div>
+                {customer?.address && <div className="md:col-span-3"><span className="font-medium text-gray-700">Address:</span><p className="text-gray-900 ml-1 mt-1">{customer.address}</p></div>}
+              </div>
+            </div>
+          ) : (
+            <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-center mb-4">
+                <User className="h-4 w-4 mr-2 text-blue-600" />
+                <h4 className="font-semibold text-blue-800">Customer Information</h4>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="customer_name" className="flex items-center"><User className="h-3 w-3 mr-1" /> Name *</Label>
+                  <Input id="customer_name" value={formData.customer_name || ''} onChange={(e) => handleInputChange('customer_name', e.target.value)} placeholder="Customer Name" className="bg-white" required={formData.customer_id === 0} />
                 </div>
-                <div>
-                  <span className="font-medium text-gray-700">Mobile:</span>
-                  <p className="text-gray-900 ml-1">{customer.mobile_number}</p>
+                <div className="space-y-2">
+                  <Label htmlFor="mobile_number" className="flex items-center"><Phone className="h-3 w-3 mr-1" /> Mobile *</Label>
+                  <Input id="mobile_number" value={formData.mobile_number || ''} onChange={(e) => handleInputChange('mobile_number', e.target.value)} placeholder="Mobile Number" className="bg-white" required={formData.customer_id === 0} />
                 </div>
-                <div className="md:col-span-1">
-                  <span className="font-medium text-gray-700">WhatsApp:</span>
-                  <p className="text-gray-900 ml-1">{customer.whatsapp_number || 'N/A'}</p>
+                <div className="space-y-2">
+                  <Label htmlFor="whatsapp_number" className="flex items-center"><MessageSquare className="h-3 w-3 mr-1" /> WhatsApp</Label>
+                  <Input id="whatsapp_number" value={formData.whatsapp_number || ''} onChange={(e) => handleInputChange('whatsapp_number', e.target.value)} placeholder="WhatsApp Number" className="bg-white" />
                 </div>
-                {customer.address && (
-                  <div className="md:col-span-3">
-                    <span className="font-medium text-gray-700">Address:</span>
-                    <p className="text-gray-900 ml-1 mt-1">{customer.address}</p>
-                  </div>
-                )}
               </div>
             </div>
           )}
@@ -353,6 +378,30 @@ export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }:
               Product Information
             </h4>
             
+            {/* === HIGHLIGHTED CATEGORY SELECTION (MOVED TO TOP) === */}
+            <div className="mb-5 p-3 bg-white rounded-md border border-indigo-200 shadow-sm">
+                <Label htmlFor="category" className="flex items-center text-indigo-700 font-semibold mb-2">
+                    <LayoutGrid className="h-4 w-4 mr-2" />
+                    Select Category
+                </Label>
+                <Select 
+                  value={formData.category || ''} 
+                  onValueChange={(value) => handleInputChange('category', value)}
+                >
+                  <SelectTrigger className="h-11 bg-indigo-50/30 border-indigo-200 focus:ring-indigo-500">
+                    <SelectValue placeholder="-- Click to select a category --" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categoryOptions.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+            </div>
+            
+            {/* Rest of Product Info */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
               <div className="space-y-2 lg:col-span-2">
                 <Label htmlFor="product_name" className="flex items-center">
@@ -381,7 +430,7 @@ export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }:
                   required
                 >
                   <SelectTrigger className="pr-10">
-                    <SelectValue placeholder="Select order type" />
+                    <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
                     {orderTypeOptions.map((option) => (
@@ -404,30 +453,9 @@ export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }:
                   min="0"
                   value={formData.quantity || ''}
                   onChange={(e) => handleInputChange('quantity', e.target.value)}
-                  placeholder="Enter quantity"
+                  placeholder="Qty"
                   className="pr-10"
                 />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-              <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
-                <Select 
-                  value={formData.category || ''} 
-                  onValueChange={(value) => handleInputChange('category', value)}
-                >
-                  <SelectTrigger className="pr-10">
-                    <SelectValue placeholder="Select category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categoryOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
             </div>
           </div>
@@ -684,15 +712,12 @@ export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }:
             )}
           </div>
           
-          {/* === HIGHLIGHTED ORDER STATUS FIELD (MOVED TO THE END) === */}
+          {/* Status Field */}
           <div className="p-4 bg-blue-50/70 border border-blue-400 rounded-lg shadow-md mt-6">
             <div className="space-y-2">
               <Label htmlFor="status" className="flex items-center text-lg font-semibold text-blue-800">
                 <CheckCircle className="h-5 w-5 mr-2" />
                 Order Status *
-                <span className="ml-3 text-sm font-normal text-blue-600">
-                   
-                </span>
               </Label>
               <Select 
                 value={formData.status || ''} 
@@ -712,7 +737,6 @@ export function OrderForm({ isOpen, onClose, onSuccess, order, mode, customer }:
               </Select>
             </div>
           </div>
-          {/* === END OF HIGHLIGHTED ORDER STATUS FIELD === */}
 
           {/* Description Section */}
           <div className="space-y-2">
