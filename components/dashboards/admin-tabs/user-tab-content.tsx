@@ -52,7 +52,8 @@ function StaffDetailsDialog({ isOpen, onClose, staff, isLoading }: StaffDetailsD
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-md">
+            {/* UPDATED: Added max-h and overflow classes for scrollability */}
+            <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>Staff Member Details</DialogTitle>
                     <DialogDescription>
