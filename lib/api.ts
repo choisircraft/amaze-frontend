@@ -1,7 +1,7 @@
 import { getAuthHeaders } from './auth'
 
 // API Configuration
-export const API_BASE_URL = 'https://api.choisircraft.com'
+export const API_BASE_URL = 'http://127.0.0.1:8000'
 
 // API Endpoints
 export const API_ENDPOINTS = {
@@ -173,6 +173,11 @@ export interface CreateOrderRequest {
   additional_amount?: number
   total_amount?: number
   account_name?: string
+
+  // ✅ NEW: Add these fields to allow creating a customer on the fly
+  customer_name?: string
+  mobile_number?: string
+  whatsapp_number?: string
 }
 
 export interface UpdateOrderRequest {
