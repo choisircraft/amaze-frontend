@@ -1,23 +1,32 @@
 // FILE: src/components/admin/admin-tabs/project-management-page.tsx
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react'; // Added useState and useEffect
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+
 
 import { 
     type Order, 
     type DetailedTask, 
     type OrderById, 
+    getActiveStaffs // Added staff fetching function
 } from "@/lib/admin"; 
 
 import {
-    FolderOpen, Package, Edit, Trash2, Plus, Search, Filter, Eye, Calendar, User, UserPlus, IndianRupee, Phone, MessageSquare, CreditCard, Truck, Image as ImageIcon, Repeat2, Loader2, CheckSquare
+    FolderOpen, Package, Edit, Trash2, Plus, Search, Filter, Eye, Calendar, User, UserPlus, IndianRupee, Phone, MessageSquare, CreditCard, Truck, Image as ImageIcon, Repeat2, Loader2, CheckSquare, ChevronDown
 } from "lucide-react";
 
-// --- Utility Functions (Moved from AdminDashboard) ---
+// --- Type Definitions ---
+// Define a simple Staff type for the filter prop
+type Staff = {
+    id: number;
+    name: string;
+};
 
 type OrderWithGeneratedId = Order & { 
     generated_order_id?: string | null; 
@@ -27,9 +36,21 @@ type OrderWithGeneratedId = Order & {
     completion_date?: string | null;
     created_by_staff_name?: string | null;
     created_on?: string;
-    // Assuming customer_name is present on the base Order type or included here implicitly
     customer_name?: string | null;
+    category?: string | null; // Added for category filtering
 };
+
+// --- Constants for Filters ---
+const ORDER_STATUSES = ['pending', 'in_progress', 'completed', 'cancelled'];
+const PROJECT_CATEGORIES = [
+    { value: 'crystal_wall_art', label: 'Crystal Wall Art' },
+    { value: 'amaze_ads', label: 'Amaze Ads' },
+    { value: 'crystal_glass_art', label: 'Crystal Glass Art' },
+    { value: 'sign_board_amaze', label: 'Sign Board Amaze' },
+];
+
+
+// --- Utility Functions (Moved from AdminDashboard) ---
 
 const getProjectStatusColor = (status?: string | null) => {
     const s = status?.toLowerCase();
@@ -271,8 +292,8 @@ export const ProjectDetailsDialog: React.FC<ProjectDetailsDialogProps> = ({
 // --- Main Project Management Component ---
 
 interface ProjectManagementProps {
-    orders: OrderWithGeneratedId[]; 
-    tasks: DetailedTask[]; // Not strictly needed here but kept for original context
+    orders: OrderWithGeneratedId[];
+    tasks: DetailedTask[];
     isLoading: boolean;
     searchTerm: string;
     setSearchTerm: (term: string) => void;
@@ -311,15 +332,144 @@ export const ProjectManagementPage: React.FC<ProjectManagementProps> = ({
     onCloseViewProject
 }) => {
     
-    const filteredOrders = useMemo(() => orders.filter(order =>
-        (order.description && order.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (order.customer_name && order.customer_name.toLowerCase().includes(searchTerm.toLowerCase())) || // Added customer name to search
-        (order.product_name && order.product_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (order.id && order.id.toString().includes(searchTerm)) ||
-        (order.generated_order_id && order.generated_order_id.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (order.status && order.status.toLowerCase().includes(searchTerm.toLowerCase()))
-    ), [orders, searchTerm]);
+    // --- State for self-fetched data ---
+    const [staff, setStaff] = useState<Staff[]>([]);
 
+    // --- Filter States ---
+    const [statusFilter, setStatusFilter] = useState("all");
+    const [categoryFilter, setCategoryFilter] = useState("all");
+    const [staffFilter, setStaffFilter] = useState("all");
+    const [fromDate, setFromDate] = useState("");
+    const [toDate, setToDate] = useState("");
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+    // --- Data Fetching Effect for Staff ---
+    useEffect(() => {
+        const fetchStaff = async () => {
+            const response = await getActiveStaffs();
+            // Assuming the response structure is { data: { staffs: Staff[] } }
+            if (response.data && response.data.staffs) {
+                setStaff(response.data.staffs);
+            } else {
+                console.error("Failed to fetch staff list:", response.error);
+            }
+        };
+
+        fetchStaff();
+    }, []); // Empty dependency array ensures this runs only once on mount
+    
+    const filteredOrders = useMemo(() => orders.filter(order => {
+        // Search Term Check
+        const matchesSearch =
+            (order.description && order.description.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (order.customer_name && order.customer_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (order.product_name && order.product_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (order.id && order.id.toString().includes(searchTerm)) ||
+            (order.generated_order_id && order.generated_order_id.toLowerCase().includes(searchTerm.toLowerCase()));
+
+        // Status Filter Check
+        const matchesStatus = statusFilter === 'all' || order.status?.toLowerCase() === statusFilter.toLowerCase();
+        
+        // Staff Filter Check
+        const matchesStaff = staffFilter === 'all' || order.created_by_staff_name === staffFilter;
+
+        // Category Filter Check
+        const matchesCategory = categoryFilter === 'all' || order.category?.toLowerCase() === categoryFilter.toLowerCase();
+
+        // Date Filter Check
+        let matchesDate = true;
+        const projectCompletionDate = order.completion_date ? new Date(order.completion_date).getTime() : null;
+        const hasDateFilters = fromDate || toDate;
+
+        if (hasDateFilters) {
+            if (projectCompletionDate === null) {
+                matchesDate = false;
+            } else {
+                if (fromDate) {
+                    const fromDateTime = new Date(fromDate);
+                    fromDateTime.setHours(0, 0, 0, 0);
+                    matchesDate = matchesDate && projectCompletionDate >= fromDateTime.getTime();
+                }
+                if (toDate) {
+                    const toDateTime = new Date(toDate);
+                    toDateTime.setHours(23, 59, 59, 999);
+                    matchesDate = matchesDate && projectCompletionDate <= toDateTime.getTime();
+                }
+            }
+        }
+
+        return matchesSearch && matchesStatus && matchesStaff && matchesCategory && matchesDate;
+
+    }), [orders, searchTerm, statusFilter, staffFilter, categoryFilter, fromDate, toDate]);
+
+    const activeFilterCount = [statusFilter, staffFilter, categoryFilter, fromDate, toDate].filter(f => f !== 'all' && f !== '').length;
+
+    const renderFilters = () => (
+        <>
+            <div className="relative flex-1 min-w-[150px]">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                    placeholder="Search by ID, name, product..."
+                    className="pl-10"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
+            
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full md:w-[150px] flex-shrink-0">
+                    <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    {ORDER_STATUSES.map(status => (
+                        <SelectItem key={status} value={status}>
+                            {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+
+            <Select value={staffFilter} onValueChange={setStaffFilter} disabled={isLoading || staff.length === 0}>
+                <SelectTrigger className="w-full md:w-[150px] flex-shrink-0">
+                    <SelectValue placeholder="Staff" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All Staff</SelectItem>
+                    {staff.map(s => (<SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>))}
+                </SelectContent>
+            </Select>
+
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-full md:w-[180px] flex-shrink-0">
+                    <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {PROJECT_CATEGORIES.map(cat => (
+                        <SelectItem key={cat.value} value={cat.value}>
+                            {cat.label}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+
+            <Input
+                type="date"
+                placeholder="Target From Date"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+                className="w-full md:w-[150px] flex-shrink-0"
+            />
+            <Input
+                type="date"
+                placeholder="Target To Date"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+                className="w-full md:w-[150px] flex-shrink-0"
+            />
+        </>
+    );
 
     return (
         <Card>
@@ -339,22 +489,30 @@ export const ProjectManagementPage: React.FC<ProjectManagementProps> = ({
                 </div>
             </CardHeader>
             <CardContent>
-                {/* Search and Filter Section */}
-                <div className="flex items-center space-x-2 mb-6">
-                    <div className="relative flex-1">
-                        <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                        <Input
-                            placeholder="Search by ID, name, product, or status..."
-                            className="pl-10"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
-                    <Button variant="outline">
-                        <Filter className="h-4 w-4 mr-2" />
-                        Filter
-                    </Button>
+                {/* --- SEARCH AND FILTER SECTION (Desktop) --- */}
+                <div className="hidden md:flex items-center space-x-2 mb-6 gap-2 flex-wrap">
+                    {renderFilters()}
                 </div>
+
+                {/* --- SEARCH AND FILTER SECTION (Mobile) --- */}
+                <Collapsible 
+                    open={isFilterOpen} 
+                    onOpenChange={setIsFilterOpen}
+                    className="md:hidden mb-4 border rounded-lg bg-gray-50"
+                >
+                    <CollapsibleTrigger asChild>
+                        <Button variant="ghost" className="w-full justify-start text-sm text-gray-700 p-3 h-auto">
+                            <Filter className="h-4 w-4 mr-2" />
+                            Filters ({activeFilterCount})
+                            <ChevronDown className={`h-4 w-4 ml-auto transition-transform ${isFilterOpen ? 'rotate-180' : 'rotate-0'}`} />
+                        </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-3 p-3 pt-0">
+                        <div className="flex flex-col gap-3">
+                            {renderFilters()}
+                        </div>
+                    </CollapsibleContent>
+                </Collapsible>
                 
                 {isLoading ? (
                     <div className="flex items-center justify-center py-8">
@@ -364,7 +522,12 @@ export const ProjectManagementPage: React.FC<ProjectManagementProps> = ({
                 ) : filteredOrders.length === 0 ? (
                     <div className="text-center py-8">
                         <FolderOpen className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                        No projects found.
+                        <p className="text-gray-500">
+                           {searchTerm || activeFilterCount > 0
+                                ? 'No projects found matching your criteria.'
+                                : 'No projects found.'
+                           }
+                        </p>
                     </div>
                 ) : (
                     <div className="space-y-4"> 
@@ -390,7 +553,6 @@ export const ProjectManagementPage: React.FC<ProjectManagementProps> = ({
                                                 <FolderOpen className="h-6 w-6 text-blue-600" />
                                             </div>
                                             <div>
-                                                {/* MODIFICATION: Display Customer Name here */}
                                                 <h3 className="font-semibold text-lg">
                                                     {project.customer_name || `Project PRJ-${project.id}`}
                                                 </h3> 
