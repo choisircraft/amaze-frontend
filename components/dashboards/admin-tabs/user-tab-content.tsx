@@ -6,17 +6,85 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { Users, Edit, Trash2, Plus } from "lucide-react"
+import { Users, Edit, Trash2, Plus, Eye } from "lucide-react" // Added Eye icon
 
-// Shadcn imports for the form
+// Shadcn imports for the form and dialogs
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
-// API types and client (assuming paths are correct)
+// API types and client
 import { ApiClient, type StaffMember, type CreateStaffRequest, type UpdateStaffRequest } from "@/lib/api"
+
+
+// =================================================================
+// STAFF DETAILS DIALOG (New Internal Component)
+// =================================================================
+
+interface StaffDetailsDialogProps {
+    isOpen: boolean
+    onClose: () => void
+    staff: StaffMember | null
+    isLoading: boolean
+}
+
+function StaffDetailsDialog({ isOpen, onClose, staff, isLoading }: StaffDetailsDialogProps) {
+    
+    const formatDate = (dateString?: string) => {
+        if (!dateString) return 'N/A';
+        return new Date(dateString).toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
+    };
+
+    const DetailItem = ({ label, value }: { label: string; value?: string | React.ReactNode }) => (
+        <div>
+            <p className="text-sm text-gray-500">{label}</p>
+            <p className="font-medium">{value || 'N/A'}</p>
+        </div>
+    );
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Staff Member Details</DialogTitle>
+                    <DialogDescription>
+                        Full details for {staff?.staff_name || '...'}
+                    </DialogDescription>
+                </DialogHeader>
+                {isLoading ? (
+                     <div className="flex items-center justify-center py-8">
+                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                     </div>
+                ) : staff ? (
+                    <div className="space-y-4 py-4">
+                        <DetailItem label="Full Name" value={staff.staff_name} />
+                        <DetailItem label="Username / Email" value={staff.username} />
+                        <DetailItem label="Role" value={<Badge variant="secondary" className="capitalize">{staff.role}</Badge>} />
+                        <DetailItem label="Address" value={staff.address} />
+                        <DetailItem label="Status" value={
+                            <Badge variant={staff.status === 'active' ? 'default' : 'destructive'} className="capitalize bg-green-500 text-white hover:bg-green-600">
+                                {staff.status}
+                            </Badge>
+                        } />
+                        <DetailItem label="Image URL" value={staff.image ? <a href={staff.image} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline break-all">{staff.image}</a> : 'No Image'} />
+                        <DetailItem label="Created On" value={formatDate(staff.created_at)} />
+                        <DetailItem label="Last Updated" value={formatDate(staff.updated_at)} />
+                    </div>
+                ) : (
+                    <p className="text-center py-8 text-gray-500">Could not load staff details.</p>
+                )}
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 
 // =================================================================
@@ -242,7 +310,7 @@ function StaffForm({ isOpen, onClose, onSuccess, staff, mode }: StaffFormProps) 
             </Alert>
           )}
 
-          <div className="flex justify-end space-x-2 pt-4 sticky bottom-0 bg-white border-t">
+          <div className="flex justify-end space-x-2 pt-4 sticky bottom-0 bg-background border-t">
             <Button type="button" variant="outline" onClick={onClose} disabled={isFormLoading}>
               Cancel
             </Button>
@@ -271,6 +339,11 @@ export const StaffManagementPage: React.FC = () => {
     const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
     const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
 
+    // View details state
+    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [viewingStaff, setViewingStaff] = useState<StaffMember | null>(null);
+    const [isDetailsLoading, setIsDetailsLoading] = useState(false);
+
     const handleCloseForm = () => {
         setIsStaffFormOpen(false);
         setEditingStaff(null);
@@ -280,7 +353,6 @@ export const StaffManagementPage: React.FC = () => {
         setIsLoading(true);
         setError('');
         try {
-            // Correct API call: using getStaff()
             const data = await ApiClient.getStaff(); 
             setStaff(data);
         } catch (err) {
@@ -304,16 +376,13 @@ export const StaffManagementPage: React.FC = () => {
         setIsStaffFormOpen(true)
     }
 
-    // New logic: Fetch staff details when editing
     const handleEditStaff = async (id: number) => {
         setFormMode('edit');
         setIsStaffFormOpen(true);
-        // Show loading indication on the page temporarily (optional, could use toast instead)
         setIsLoading(true); 
-        setEditingStaff(null); // Clear previous staff details
+        setEditingStaff(null); 
 
         try {
-            // Use getStaffById to ensure the form has the latest, complete details
             const staffMember = await ApiClient.getStaffById(id);
             setEditingStaff(staffMember); 
         } catch (err) {
@@ -323,6 +392,25 @@ export const StaffManagementPage: React.FC = () => {
             setIsLoading(false);
         }
     }
+    
+    // New handler to view staff details
+    const handleViewStaff = async (id: number) => {
+        setIsViewModalOpen(true);
+        setIsDetailsLoading(true);
+        setViewingStaff(null);
+        setError(''); 
+
+        try {
+            const staffDetails = await ApiClient.getStaffById(id);
+            setViewingStaff(staffDetails);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to fetch staff details.');
+            setIsViewModalOpen(false);
+        } finally {
+            setIsDetailsLoading(false);
+        }
+    };
+
 
     const handleDeleteStaff = async (id: number) => {
         try {
@@ -361,7 +449,7 @@ export const StaffManagementPage: React.FC = () => {
                         </div>
                     )}
                     
-                    {isLoading && !isStaffFormOpen ? ( // Only show full-page loader if not fetching for a modal
+                    {isLoading && !isStaffFormOpen ? ( 
                         <div className="flex items-center justify-center py-8">
                             <div className="text-center">
                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
@@ -387,10 +475,13 @@ export const StaffManagementPage: React.FC = () => {
                                         <div className="flex items-center space-x-3">
                                             {/* Staff Info */}
                                             <div className="flex flex-col">
-                                                <div className="flex items-center space-x-2">
+                                                <div className="flex flex-wrap items-center gap-2">
                                                     <p className="font-medium">{staffMember.staff_name}</p>
                                                     <Badge variant="secondary" className="text-xs capitalize">
                                                         {staffMember.role}
+                                                    </Badge>
+                                                    <Badge variant={staffMember.status === 'active' ? 'default' : 'destructive'} className="capitalize bg-green-500 text-white hover:bg-green-600">
+                                                        {staffMember.status}
                                                     </Badge>
                                                 </div>
                                                 <p className="text-sm text-gray-500">{staffMember.username}</p>
@@ -402,8 +493,15 @@ export const StaffManagementPage: React.FC = () => {
                                             <Button 
                                                 variant="outline" 
                                                 size="sm"
+                                                onClick={() => handleViewStaff(staffMember.id)}
+                                            >
+                                                <Eye className="h-4 w-4 mr-1" /> View
+                                            </Button>
+                                            <Button 
+                                                variant="outline" 
+                                                size="sm"
                                                 onClick={() => handleEditStaff(staffMember.id)}
-                                                disabled={isLoading} // Disable while fetching data for the form
+                                                disabled={isLoading}
                                             >
                                                 <Edit className="h-4 w-4 mr-1" /> Edit
                                             </Button>
@@ -448,6 +546,14 @@ export const StaffManagementPage: React.FC = () => {
                 onSuccess={handleFormSuccess}
                 staff={editingStaff}
                 mode={formMode}
+            />
+
+            {/* Staff Details Modal */}
+            <StaffDetailsDialog 
+                isOpen={isViewModalOpen}
+                onClose={() => setIsViewModalOpen(false)}
+                staff={viewingStaff}
+                isLoading={isDetailsLoading}
             />
         </>
     );
