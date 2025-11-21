@@ -5,11 +5,8 @@
 import { useState, useEffect, useMemo } from "react"
 import { DashboardLayout } from "../dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Input } from "@/components/ui/input"
-// Removed: AlertDialog components (now only used in LeadsTab/OrdersTab, keeping reference for clarity)
 
 // Import the new components
 import { CRMModals } from "@/components/dashboards/modals/crm-modals"
@@ -22,25 +19,11 @@ import { type CustomerFormData } from "@/components/customer-form"
 import { ApiClient, type Customer, type Order } from "@/lib/api"
 import {
   Users,
-  Phone,
   Calendar,
   TrendingUp,
-  Search,
-  MessageSquare,
   Target,
-  Trash2,
-  Plus,
   ShoppingCart,
-  ArrowRight,
-  Edit,
-  IndianRupee,
-  Loader2,
 } from "lucide-react"
-
-// Import Shadcn Select components (Used in filters, but filtering logic passed down)
-// NOTE: These specific imports are no longer needed here if filters are fully moved into the Tab components. 
-// We keep them here for now just to show how minimal the main imports become.
-// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 import {
   getRealCustomers,
@@ -50,7 +33,7 @@ import {
   type StaffUser
 } from "@/lib/crm"
 
-// --- DEFINING THE ENHANCED ORDER TYPE (Must stay here for state typing) ---
+// --- DEFINING THE ENHANCED ORDER TYPE ---
 export interface OrderById {
   id: number
   customer_id: number
@@ -74,7 +57,7 @@ export interface OrderById {
   address?: string
 }
 
-// --- Helper Data and Functions (Kept for central access and memoization logic) ---
+// --- Helper Data and Functions ---
 
 const LEAD_STATUSES = ['cold', 'warm', 'hot', 'converted', 'lost']
 const ORDER_STATUSES = ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled']
@@ -107,7 +90,7 @@ const isDateWithinCustomRange = (
 };
 
 
-// Helper function to get status color for leads (Passed to LeadsTab)
+// Helper function to get status color for leads
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'cold': return 'bg-blue-100 text-blue-800'
@@ -119,7 +102,7 @@ const getStatusColor = (status: string) => {
   }
 }
 
-// Helper function to get status color for orders (Passed to OrdersTab)
+// Helper function to get status color for orders
 const getOrderStatusColor = (status: string) => {
   switch (status) {
     case 'pending': return 'bg-yellow-100 text-yellow-800'
@@ -133,7 +116,7 @@ const getOrderStatusColor = (status: string) => {
 
 export function CRMDashboard() {
   // =================================================================
-  // === 1. CORE STATE (All centralized here) =========================
+  // === 1. CORE STATE ===============================================
   // =================================================================
   const [customers, setCustomers] = useState<Customer[]>([])
   const [orders, setOrders] = useState<Order[]>([])
@@ -182,7 +165,7 @@ export function CRMDashboard() {
 
 
   // =================================================================
-  // === 2. DATA LOADING (Unchanged) =================================
+  // === 2. DATA LOADING =============================================
   // =================================================================
   useEffect(() => {
     loadAllData()
@@ -209,7 +192,6 @@ export function CRMDashboard() {
   }
 
   const loadCustomers = async () => {
-    // ... (omitted for brevity, assume fetching logic remains)
     try {
       setIsLoading(true)
       setError('')
@@ -223,7 +205,6 @@ export function CRMDashboard() {
   }
 
   const loadOrders = async () => {
-    // ... (omitted for brevity, assume fetching logic remains)
     try {
       setIsOrdersLoading(true)
       const orderData = await ApiClient.getOrders()
@@ -236,7 +217,6 @@ export function CRMDashboard() {
   }
 
   const loadRealCustomers = async () => {
-    // ... (omitted for brevity, assume fetching logic remains)
     try {
       setIsRealCustomersLoading(true)
       const data = await getRealCustomers()
@@ -249,7 +229,7 @@ export function CRMDashboard() {
   }
 
   // =================================================================
-  // === 3. HANDLERS (All centralized here) ==========================
+  // === 3. HANDLERS =================================================
   // =================================================================
   const handleViewLead = (lead: Customer) => { setViewingLead(lead) }
   const handleAddCustomer = () => { setEditingItem(null); setEditingEntityType('lead'); setFormMode('create'); setIsCustomerFormOpen(true); }
@@ -288,11 +268,10 @@ export function CRMDashboard() {
 
 
   // =================================================================
-  // === 4. MEMOIZED FILTERED DATA (Must stay here) ==================
+  // === 4. MEMOIZED FILTERED DATA ===================================
   // =================================================================
 
   const filteredCustomers = useMemo(() => {
-    // ... (filtering logic for customers kept here)
     return customers
       .filter(customer =>
         searchTerm === '' ||
@@ -314,7 +293,6 @@ export function CRMDashboard() {
   }, [customers, searchTerm, leadStatusFilter, leadFromDate, leadToDate, leadStaffFilterName]);
 
   const filteredOrders = useMemo(() => {
-    // ... (filtering logic for orders kept here)
     const allKnownCustomers: (Customer | RealCustomer)[] = [...customers, ...realCustomers];
 
     return orders
@@ -344,7 +322,6 @@ export function CRMDashboard() {
   }, [orders, customers, realCustomers, orderSearchTerm, orderStatusFilter, orderFromDate, orderToDate, orderStaffFilterName]);
 
   const filteredRealCustomers = useMemo(() => {
-    // ... (filtering logic for real customers kept here)
     return realCustomers
       .filter(customer =>
         realCustomerSearchTerm === '' ||
@@ -363,7 +340,7 @@ export function CRMDashboard() {
   }, [realCustomers, realCustomerSearchTerm, customerFromDate, customerToDate, customerStaffFilterName]);
 
 
-  // --- Metrics (Unchanged) ---
+  // --- Metrics ---
   const totalLeads = customers.length
   const hotLeads = customers.filter(c => c.status === 'hot').length
   const warmLeads = customers.filter(c => c.status === 'warm').length
@@ -379,23 +356,52 @@ export function CRMDashboard() {
   ]
 
   // =================================================================
-  // === 5. RENDER (Updated to move Metrics Grid) ====================
+  // === 5. RENDER ===================================================
   // =================================================================
   return (
     <DashboardLayout title="CRM Dashboard" role="crm">
       <main className="flex-1 space-y-6 p-4 md:p-6 overflow-y-auto">
-        {/*
-          OLD LOCATION OF METRICS GRID (REMOVED)
-        */}
-
-        <Tabs defaultValue="leads" className="space-y-6">
+        
+        <Tabs defaultValue="orders" className="space-y-6">
           <TabsList className="grid w-full grid-cols-2 md:grid-cols-5">
-            <TabsTrigger value="leads" className="data-[state=active]:bg-black data-[state=active]:text-white">Leads</TabsTrigger>
             <TabsTrigger value="orders" className="data-[state=active]:bg-black data-[state=active]:text-white">Orders</TabsTrigger>
+            <TabsTrigger value="leads" className="data-[state=active]:bg-black data-[state=active]:text-white">Leads</TabsTrigger>
             <TabsTrigger value="customers" className="data-[state=active]:bg-black data-[state=active]:text-white">Customers</TabsTrigger>
             <TabsTrigger value="activities" className="data-[state=active]:bg-black data-[state=active]:text-white">Activities</TabsTrigger>
             <TabsTrigger value="reports" className="data-[state=active]:bg-black data-[state=active]:text-white">Reports</TabsTrigger>
           </TabsList>
+
+          {/* ======================= ORDERS TAB COMPONENT ======================= */}
+          <TabsContent value="orders" className="space-y-6">
+            <OrdersTab
+              error={error}
+              isOrdersLoading={isOrdersLoading}
+              orderSearchTerm={orderSearchTerm}
+              setOrderSearchTerm={setOrderSearchTerm}
+              orderStaffFilterName={orderStaffFilterName}
+              setOrderStaffFilterName={setOrderStaffFilterName}
+              orderStatusFilter={orderStatusFilter}
+              setOrderStatusFilter={setOrderStatusFilter}
+              orderFromDate={orderFromDate}
+              setOrderFromDate={setOrderFromDate}
+              orderToDate={orderToDate}
+              setOrderToDate={setOrderToDate}
+              staffs={staffs}
+              isStaffLoading={isStaffLoading}
+              filteredOrders={filteredOrders}
+              ORDER_STATUSES={ORDER_STATUSES}
+              customers={customers}
+              realCustomers={realCustomers}
+              
+              // 👇 FIXED: Added the missing handler prop here
+              handleCreateOrder={handleMakeNewOrder}
+              
+              handleViewOrder={handleViewOrder}
+              handleEditOrder={handleEditOrder}
+              handleDeleteOrder={handleDeleteOrder}
+              getOrderStatusColor={getOrderStatusColor}
+            />
+          </TabsContent>
 
           {/* ======================= LEADS TAB COMPONENT ======================= */}
           <TabsContent value="leads" className="space-y-6">
@@ -422,34 +428,6 @@ export function CRMDashboard() {
               handleConvertToOrder={handleConvertToOrder}
               handleDeleteCustomer={handleDeleteCustomer}
               getStatusColor={getStatusColor}
-            />
-          </TabsContent>
-
-          {/* ======================= ORDERS TAB COMPONENT ======================= */}
-          <TabsContent value="orders" className="space-y-6">
-            <OrdersTab
-              error={error}
-              isOrdersLoading={isOrdersLoading}
-              orderSearchTerm={orderSearchTerm}
-              setOrderSearchTerm={setOrderSearchTerm}
-              orderStaffFilterName={orderStaffFilterName}
-              setOrderStaffFilterName={setOrderStaffFilterName}
-              orderStatusFilter={orderStatusFilter}
-              setOrderStatusFilter={setOrderStatusFilter}
-              orderFromDate={orderFromDate}
-              setOrderFromDate={setOrderFromDate}
-              orderToDate={orderToDate}
-              setOrderToDate={setOrderToDate}
-              staffs={staffs}
-              isStaffLoading={isStaffLoading}
-              filteredOrders={filteredOrders}
-              ORDER_STATUSES={ORDER_STATUSES}
-              customers={customers}
-              realCustomers={realCustomers}
-              handleViewOrder={handleViewOrder}
-              handleEditOrder={handleEditOrder}
-              handleDeleteOrder={handleDeleteOrder}
-              getOrderStatusColor={getOrderStatusColor}
             />
           </TabsContent>
 
@@ -516,10 +494,10 @@ export function CRMDashboard() {
             </Card>
           </TabsContent>
 
-          {/* REPORTS TAB - UPDATED TO INCLUDE METRICS GRID */}
+          {/* REPORTS TAB */}
           <TabsContent value="reports" className="space-y-6">
             
-            {/* NEW LOCATION: Metrics Grid */}
+            {/* Metrics Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {crmMetrics.map((metric) => {
                     const Icon = metric.icon
@@ -578,7 +556,7 @@ export function CRMDashboard() {
         </Tabs>
       </main>
 
-      {/* MODALS Component (already extracted) */}
+      {/* MODALS Component */}
       <CRMModals
         isCustomerFormOpen={isCustomerFormOpen}
         setIsCustomerFormOpen={setIsCustomerFormOpen}
