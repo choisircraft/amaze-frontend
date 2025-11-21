@@ -11,22 +11,20 @@ import {
     AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
 } from "@/components/ui/alert-dialog"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Search, ShoppingCart, Edit, Trash2, IndianRupee, Calendar, Package, SlidersHorizontal, Image as ImageIcon, Upload, X } from "lucide-react"
+// Added 'Plus' to imports
+import { Search, ShoppingCart, Edit, Trash2, IndianRupee, Calendar, Package, SlidersHorizontal, Image as ImageIcon, Upload, X, Plus } from "lucide-react"
 import { type Order, type Customer, type RealCustomer, type StaffUser } from "@/lib/sales"
 
 // =========================================================================================
 // API IMPORTS from '@/lib/crm'
-// NOTE: Ensure your '@/lib/crm' exports these functions and types.
 // =========================================================================================
 import { 
-    type OrderImage as ApiOrderImage, // Renamed to avoid local conflict
+    type OrderImage as ApiOrderImage, 
     getOrderImages, 
     uploadOrderImage, 
     deleteOrderImage 
 } from '@/lib/crm'; 
 
-// Local type definition based on the imported type, ensuring public_id is present
-// This ensures compatibility with the image manager's delete handler.
 type OrderImage = ApiOrderImage & {
     public_id: string; 
 };
@@ -53,6 +51,8 @@ interface SalesOrdersTabProps {
     ORDER_STATUSES: string[]
     customers: Customer[]
     realCustomers: RealCustomer[]
+    // Function to create a new order, without a pre-selected customer
+    handleMakeNewOrder: (customer: RealCustomer | null) => void
     handleViewOrder: (order: Order) => void
     handleEditOrder: (order: Order) => void
     handleDeleteOrder: (id: number) => void
@@ -83,9 +83,7 @@ const OrderImageManagerDialog: React.FC<ImageManagerProps> = ({ order, onClose }
         setIsLoading(true);
         setError('');
         try {
-            // INTEGRATED API CALL
             const fetchedImages = await getOrderImages(orderId); 
-            // We cast here to ensure TypeScript accepts the fetched data structure
             setImages(fetchedImages as OrderImage[]); 
         } catch (err) {
             setError(`Failed to load images: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -109,15 +107,12 @@ const OrderImageManagerDialog: React.FC<ImageManagerProps> = ({ order, onClose }
         setIsUploading(true);
         setError('');
         try {
-            // INTEGRATED API CALL (Calling the imported function)
             const newImage = await uploadOrderImage(orderId, uploadFile, uploadDescription); 
-            
             setImages(prev => [...prev, newImage as OrderImage]); 
 
             // Reset upload state
             setUploadFile(null);
             setUploadDescription('');
-            // Clear file input visually
             const fileInput = (document.getElementById('image-file-input') as HTMLInputElement);
             if (fileInput) fileInput.value = ''; 
 
@@ -134,14 +129,12 @@ const OrderImageManagerDialog: React.FC<ImageManagerProps> = ({ order, onClose }
         setIsLoading(true); 
         setError('');
         try {
-            // INTEGRATED API CALL (Calling the imported function, passing public_id)
             await deleteOrderImage(imageToDelete.id, imageToDelete.public_id); 
-            
             setImages(prev => prev.filter(img => img.id !== imageToDelete.id));
         } catch (err) {
             setError(`Deletion failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
             console.error(err);
-            fetchImages(); // Fallback to re-fetch on failure
+            fetchImages(); 
         } finally {
             setIsLoading(false);
         }
@@ -280,12 +273,12 @@ export const SalesOrdersTab: React.FC<SalesOrdersTabProps> = ({
     ORDER_STATUSES,
     customers,
     realCustomers,
+    handleMakeNewOrder, // Destructured here
     handleViewOrder,
     handleEditOrder,
     handleDeleteOrder,
     getOrderStatusColor
 }) => {
-    // State to manage which order's images are currently being viewed/managed
     const [selectedOrderForImages, setSelectedOrderForImages] = useState<Order | null>(null);
 
     const handleOpenImageModal = (order: Order) => {
@@ -348,6 +341,15 @@ export const SalesOrdersTab: React.FC<SalesOrdersTabProps> = ({
                             <CardTitle className="flex items-center"><ShoppingCart className="h-5 w-5 mr-2" />Sales Order Management</CardTitle>
                             <CardDescription>Manage customer orders and track sales progress</CardDescription>
                         </div>
+                        
+                        {/* NEW BUTTON: Create Order */}
+                        <Button 
+                            onClick={() => handleMakeNewOrder(null)} 
+                            className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white"
+                        >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create Order
+                        </Button>
                     </div>
                 </CardHeader>
                 <CardContent>
@@ -466,7 +468,6 @@ export const SalesOrdersTab: React.FC<SalesOrdersTabProps> = ({
                                                         >
                                                             <ImageIcon className="h-3 w-3 mr-1" />Images
                                                         </Button>
-                                                        {/* --- END NEW BUTTON --- */}
 
                                                         {/* Conditional Edit Button */}
                                                         {order.status === 'pending' ? (
@@ -494,21 +495,24 @@ export const SalesOrdersTab: React.FC<SalesOrdersTabProps> = ({
                                                             </AlertDialog>
                                                         )}
                                                         
-                                                        <AlertDialog>
-                                                            <AlertDialogTrigger asChild>
-                                                                <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700"><Trash2 className="h-3 w-3 mr-1" />Delete</Button>
-                                                            </AlertDialogTrigger>
-                                                            <AlertDialogContent>
-                                                                <AlertDialogHeader>
-                                                                    <AlertDialogTitle>Delete Order</AlertDialogTitle>
-                                                                    <AlertDialogDescription>Are you sure you want to delete Order #{order.id}?</AlertDialogDescription>
-                                                                </AlertDialogHeader>
-                                                                <AlertDialogFooter>
-                                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                                    <AlertDialogAction onClick={() => handleDeleteOrder(order.id)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
-                                                                </AlertDialogFooter>
-                                                            </AlertDialogContent>
-                                                        </AlertDialog>
+                                                        {/* Conditional Delete Button - ONLY SHOW IF PENDING */}
+                                                        {order.status === 'pending' && (
+                                                            <AlertDialog>
+                                                                <AlertDialogTrigger asChild>
+                                                                    <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700"><Trash2 className="h-3 w-3 mr-1" />Delete</Button>
+                                                                </AlertDialogTrigger>
+                                                                <AlertDialogContent>
+                                                                    <AlertDialogHeader>
+                                                                        <AlertDialogTitle>Delete Order</AlertDialogTitle>
+                                                                        <AlertDialogDescription>Are you sure you want to delete Order #{order.id}?</AlertDialogDescription>
+                                                                    </AlertDialogHeader>
+                                                                    <AlertDialogFooter>
+                                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                        <AlertDialogAction onClick={() => handleDeleteOrder(order.id)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+                                                                    </AlertDialogFooter>
+                                                                </AlertDialogContent>
+                                                            </AlertDialog>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
