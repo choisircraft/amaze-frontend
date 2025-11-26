@@ -59,24 +59,26 @@ const STATUS_PRIORITY: Record<string, number> = {
 const formatTimeFromISO = (isoString: string | null | undefined): string => {
     if (!isoString) return 'N/A';
     try {
-        const date = new Date(isoString);
-        if (isNaN(date.getTime())) {
-             const timeParts = isoString.split(':');
-             if (timeParts.length >= 2) {
-                 const [hours, minutes] = timeParts.map(Number);
-                 // Fallback for non-ISO strings
-                 const tempDate = new Date();
-                 tempDate.setHours(hours, minutes, 0, 0);
-                 return tempDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-             }
-             return 'N/A';
+        // We parse the string manually to ensure we show exactly what is in the DB (UTC)
+        // without converting it to the browser's local time.
+        // Format assumed: YYYY-MM-DDTHH:MM:SS...
+        if (isoString.includes('T')) {
+            const timePart = isoString.split('T')[1]; // Gets "10:00:00.000Z"
+            const [hours, minutes] = timePart.split(':');
+            
+            // Create a dummy date to use toLocaleTimeString for 12-hour format
+            // but set UTC values to keep the numbers static
+            const date = new Date();
+            date.setUTCHours(parseInt(hours), parseInt(minutes));
+            
+            return date.toLocaleTimeString('en-US', { 
+                hour: '2-digit', 
+                minute: '2-digit',
+                timeZone: 'UTC' 
+            });
         }
-        // FIX: Display using UTC timezone to match what is stored in DB
-        return date.toLocaleTimeString('en-US', { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            timeZone: 'UTC' 
-        });
+        
+        return 'N/A';
     } catch {
         return 'N/A';
     }
@@ -127,7 +129,7 @@ const getTodayDateString = () => new Date().toISOString().split('T')[0];
 
 
 // =============================================================
-// 1. ATTENDANCE EDIT MODAL COMPONENT (FIXED TIMEZONE LOGIC)
+// 1. ATTENDANCE EDIT MODAL COMPONENT (STRICT STRING MANIPULATION)
 // =============================================================
 
 interface AttendanceEditModalProps {
@@ -151,27 +153,20 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
     const [status, setStatus] = useState('present');
     const [isSaving, setIsSaving] = useState(false);
 
-    // --- HELPER: ROBUST TIME EXTRACTOR (UTC) ---
-    // Fixes the input display issue by reading UTC hours directly
+    // --- HELPER: STRICT STRING PARSER ---
+    // Do not use Date() to parse inputs. Just split string.
+    // "2023-10-27T10:00:00.000Z" -> "10:00"
     const extractTimeForInput = (isoString: string | null) => {
         if (!isoString) return '';
         try {
-            const date = new Date(isoString);
-            
-            // If valid Date object
-            if (!isNaN(date.getTime())) {
-                // FIX: Use getUTCHours to get the raw time stored in DB
-                const hours = date.getUTCHours().toString().padStart(2, '0');
-                const minutes = date.getUTCMinutes().toString().padStart(2, '0');
-                return `${hours}:${minutes}`;
+            if (isoString.includes('T')) {
+                // Gets "10:00:00.000Z"
+                const timeSegment = isoString.split('T')[1];
+                // Returns "10:00"
+                return timeSegment.substring(0, 5); 
             }
-
-            // Fallback: If backend sends "10:30:00" (Time string) instead of ISO
-            const parts = isoString.split(':');
-            if (parts.length >= 2) {
-                return `${parts[0]}:${parts[1]}`;
-            }
-            return '';
+            // Fallback for "10:00:00" format
+            return isoString.substring(0, 5);
         } catch (e) {
             return '';
         }
@@ -198,7 +193,7 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
                         const data = result.data;
                         setFetchedRecord(data);
                         
-                        // Overwrite with fresh data from API
+                        // Overwrite with fresh data
                         setCheckInTime(extractTimeForInput(data.checkin_time));
                         setCheckOutTime(extractTimeForInput(data.checkout_time));
                         setStatus(data.status || 'present');
@@ -218,7 +213,7 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
         setIsSaving(true);
 
         const activeRecord = fetchedRecord || record;
-        const recordDate = activeRecord.date;
+        const recordDate = activeRecord.date; // "YYYY-MM-DD"
 
         if (!recordDate) {
              toast({ description: "Missing date information.", variant: "destructive" });
@@ -226,17 +221,14 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
              return;
         }
 
-        // --- CONSTRUCT ISO DATE (UTC FORCED) ---
-        // This function ensures that if you type 10:00, the server receives 10:00
+        // --- CONSTRUCT ISO STRING MANUALLY ---
+        // We concatenate strings directly. 
+        // "2023-10-27" + "T" + "10:00" + ":00.000Z"
+        // Result: "2023-10-27T10:00:00.000Z"
+        // This guarantees NO timezone conversion happens in the browser.
         const timeToISO = (time: string | null): string | null => {
             if (!time) return null;
-            
-            const [hours, minutes] = time.split(':').map(Number);
-            const [year, month, day] = recordDate.split('-').map(Number);
-
-            // FIX: Use Date.UTC so the resulting ISO string matches input exactly
-            // Example: Date.UTC(2023, 9, 27, 10, 0) -> "2023-10-27T10:00:00.000Z"
-            return new Date(Date.UTC(year, month - 1, day, hours, minutes, 0)).toISOString();
+            return `${recordDate}T${time}:00.000Z`;
         };
 
         const checkinISO = timeToISO(checkInTime);
