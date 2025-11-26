@@ -64,13 +64,19 @@ const formatTimeFromISO = (isoString: string | null | undefined): string => {
              const timeParts = isoString.split(':');
              if (timeParts.length >= 2) {
                  const [hours, minutes] = timeParts.map(Number);
+                 // Fallback for non-ISO strings
                  const tempDate = new Date();
                  tempDate.setHours(hours, minutes, 0, 0);
                  return tempDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
              }
              return 'N/A';
         }
-        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        // FIX: Display using UTC timezone to match what is stored in DB
+        return date.toLocaleTimeString('en-US', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            timeZone: 'UTC' 
+        });
     } catch {
         return 'N/A';
     }
@@ -121,7 +127,7 @@ const getTodayDateString = () => new Date().toISOString().split('T')[0];
 
 
 // =============================================================
-// 1. ATTENDANCE EDIT MODAL COMPONENT (FIXED TIME & DATA)
+// 1. ATTENDANCE EDIT MODAL COMPONENT (FIXED TIMEZONE LOGIC)
 // =============================================================
 
 interface AttendanceEditModalProps {
@@ -145,9 +151,8 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
     const [status, setStatus] = useState('present');
     const [isSaving, setIsSaving] = useState(false);
 
-    // --- HELPER: ROBUST TIME EXTRACTOR ---
-    // Fixes the issue where time shows incorrectly due to UTC conversion
-    // Converts ISO string to "HH:MM" in LOCAL time
+    // --- HELPER: ROBUST TIME EXTRACTOR (UTC) ---
+    // Fixes the input display issue by reading UTC hours directly
     const extractTimeForInput = (isoString: string | null) => {
         if (!isoString) return '';
         try {
@@ -155,8 +160,9 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
             
             // If valid Date object
             if (!isNaN(date.getTime())) {
-                const hours = date.getHours().toString().padStart(2, '0');
-                const minutes = date.getMinutes().toString().padStart(2, '0');
+                // FIX: Use getUTCHours to get the raw time stored in DB
+                const hours = date.getUTCHours().toString().padStart(2, '0');
+                const minutes = date.getUTCMinutes().toString().padStart(2, '0');
                 return `${hours}:${minutes}`;
             }
 
@@ -172,7 +178,6 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
     };
 
     // --- INITIALIZE DATA FROM PROP FIRST ---
-    // This ensures data shows immediately while the API fetches fresh details
     useEffect(() => {
         if (isOpen && record) {
             setCheckInTime(extractTimeForInput(record.checkin_time));
@@ -200,7 +205,6 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
                     }
                 } catch (error) {
                     console.error("Failed to load details", error);
-                    // We silently fail here because we still have the prop data to rely on
                 } finally {
                     setIsLoadingDetails(false);
                 }
@@ -213,7 +217,6 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
     const handleSave = async () => {
         setIsSaving(true);
 
-        // Use fetchedRecord if available (more accurate), otherwise fallback to prop record
         const activeRecord = fetchedRecord || record;
         const recordDate = activeRecord.date;
 
@@ -223,18 +226,17 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
              return;
         }
 
-        // --- CONSTRUCT ISO DATE FROM TIME INPUT ---
+        // --- CONSTRUCT ISO DATE (UTC FORCED) ---
+        // This function ensures that if you type 10:00, the server receives 10:00
         const timeToISO = (time: string | null): string | null => {
             if (!time) return null;
             
             const [hours, minutes] = time.split(':').map(Number);
             const [year, month, day] = recordDate.split('-').map(Number);
 
-            // Construct Date object using Local Time (matches user input)
-            const dateObj = new Date(year, month - 1, day, hours, minutes, 0);
-            
-            // Return ISO string (handles the UTC conversion for the DB)
-            return dateObj.toISOString();
+            // FIX: Use Date.UTC so the resulting ISO string matches input exactly
+            // Example: Date.UTC(2023, 9, 27, 10, 0) -> "2023-10-27T10:00:00.000Z"
+            return new Date(Date.UTC(year, month - 1, day, hours, minutes, 0)).toISOString();
         };
 
         const checkinISO = timeToISO(checkInTime);
@@ -270,8 +272,6 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
 
     if (!isOpen) return null;
 
-    // --- DETERMINE DISPLAY NAME ---
-    // 1. Try fetched record name -> 2. Try prop record name -> 3. Try finding in staff list by ID
     const staffFromList = staffs.find(s => s.id === record.staff_id);
     const displayStaffName = fetchedRecord?.staff_name || record.staff_name || staffFromList?.name || 'Unknown Staff';
     const displayDate = fetchedRecord?.date || record.date;
