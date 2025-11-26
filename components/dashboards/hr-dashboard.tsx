@@ -24,42 +24,22 @@ import {
     getAllAttendance, 
     createAttendance,
     checkoutAttendance, 
+    updateAttendance, 
+    getAttendanceById, 
     ActiveStaff, 
     Attendance, 
     AttendanceCreatePayload,
-    ApiResponse 
+    AttendanceUpdatePayload as ApiAttendanceUpdatePayload 
 } from "@/lib/hr"; 
 
 // --- TYPE DEFINITIONS ---
-interface AttendanceUpdatePayload {
+interface LocalAttendanceUpdatePayload extends ApiAttendanceUpdatePayload {
     id: number; 
-    staff_id: number;
-    date: string;
-    checkin_time?: string | null;
-    checkout_time?: string | null;
-    status?: string;
 }
 
-// Extend Attendance interface for synthetic records
 type ComprehensiveAttendance = Attendance & {
-    id: number | string; // Allows string IDs for synthetic records
+    id: number | string; 
 };
-
-// --- SIMULATED UPDATE API FUNCTION (Replace with your actual implementation) ---
-async function updateAttendance(
-    payload: AttendanceUpdatePayload
-): Promise<ApiResponse<{ message: string; attendance: Attendance }>> {
-    console.log("Simulating API Update with payload:", payload);
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            if (typeof payload.id === 'number') { // Ensure ID is a number for real update
-                 resolve({ data: { message: "Update successful", attendance: {} as Attendance } });
-            } else {
-                 resolve({ error: "Record ID missing or invalid data provided for update." });
-            }
-        }, 800);
-    });
-}
 
 // Array of all possible statuses for easier maintenance
 const ATTENDANCE_STATUSES = ['present', 'late', 'absent', 'leave', 'half_day'];
@@ -75,7 +55,7 @@ const STATUS_PRIORITY: Record<string, number> = {
 };
 
 
-// --- Helper Functions (Time Formatting) ---
+// --- Helper Functions (Time Formatting for Display) ---
 const formatTimeFromISO = (isoString: string | null | undefined): string => {
     if (!isoString) return 'N/A';
     try {
@@ -141,7 +121,7 @@ const getTodayDateString = () => new Date().toISOString().split('T')[0];
 
 
 // =============================================================
-// 1. ATTENDANCE EDIT MODAL COMPONENT
+// 1. ATTENDANCE EDIT MODAL COMPONENT (FIXED TIME & DATA)
 // =============================================================
 
 interface AttendanceEditModalProps {
@@ -149,61 +129,112 @@ interface AttendanceEditModalProps {
     staffs: ActiveStaff[];
     isOpen: boolean;
     onClose: () => void;
-    onUpdate: (payload: AttendanceUpdatePayload) => Promise<void>;
+    onUpdate: (payload: LocalAttendanceUpdatePayload) => Promise<void>;
 }
 
 const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staffs, isOpen, onClose, onUpdate }) => {
     const { toast } = useToast();
     
-    const isRealRecord = typeof record.id === 'number';
+    // State for the specific record details fetched from API
+    const [fetchedRecord, setFetchedRecord] = useState<Attendance | null>(null);
+    const [isLoadingDetails, setIsLoadingDetails] = useState(false);
 
-    if (!isRealRecord) {
-        onClose();
-        return null;
-    }
-
-    const staff = staffs.find(s => s.id === record.staff_id);
-    
-    const [checkInTime, setCheckInTime] = useState(
-        record.checkin_time ? new Date(record.checkin_time).toISOString().substring(11, 16) : '' 
-        // Note: Using substring(11,16) on ISO string gets HH:MM in UTC, ensuring edit form sees consistent raw data
-    );
-    const [checkOutTime, setCheckOutTime] = useState(
-        record.checkout_time ? new Date(record.checkout_time).toISOString().substring(11, 16) : ''
-    );
-    const [status, setStatus] = useState(record.status || 'present');
+    // Form States
+    const [checkInTime, setCheckInTime] = useState('');
+    const [checkOutTime, setCheckOutTime] = useState('');
+    const [status, setStatus] = useState('present');
     const [isSaving, setIsSaving] = useState(false);
 
-    useEffect(() => {
-        if (isRealRecord) {
-            // Helper to safe extract time
-            const getIsoTime = (iso: string | null) => iso ? new Date(iso).toISOString().substring(11, 16) : '';
+    // --- HELPER: ROBUST TIME EXTRACTOR ---
+    // Fixes the issue where time shows incorrectly due to UTC conversion
+    // Converts ISO string to "HH:MM" in LOCAL time
+    const extractTimeForInput = (isoString: string | null) => {
+        if (!isoString) return '';
+        try {
+            const date = new Date(isoString);
             
-            setCheckInTime(getIsoTime(record.checkin_time));
-            setCheckOutTime(getIsoTime(record.checkout_time));
+            // If valid Date object
+            if (!isNaN(date.getTime())) {
+                const hours = date.getHours().toString().padStart(2, '0');
+                const minutes = date.getMinutes().toString().padStart(2, '0');
+                return `${hours}:${minutes}`;
+            }
+
+            // Fallback: If backend sends "10:30:00" (Time string) instead of ISO
+            const parts = isoString.split(':');
+            if (parts.length >= 2) {
+                return `${parts[0]}:${parts[1]}`;
+            }
+            return '';
+        } catch (e) {
+            return '';
+        }
+    };
+
+    // --- INITIALIZE DATA FROM PROP FIRST ---
+    // This ensures data shows immediately while the API fetches fresh details
+    useEffect(() => {
+        if (isOpen && record) {
+            setCheckInTime(extractTimeForInput(record.checkin_time));
+            setCheckOutTime(extractTimeForInput(record.checkout_time));
             setStatus(record.status || 'present');
         }
-    }, [record, isRealRecord]);
+    }, [isOpen, record]);
 
+    // --- FETCH FRESH DETAILS FROM API ---
+    useEffect(() => {
+        const fetchDetails = async () => {
+            if (isOpen && typeof record.id === 'number') {
+                setIsLoadingDetails(true);
+                try {
+                    const result = await getAttendanceById(record.id);
+                    
+                    if (result.data) {
+                        const data = result.data;
+                        setFetchedRecord(data);
+                        
+                        // Overwrite with fresh data from API
+                        setCheckInTime(extractTimeForInput(data.checkin_time));
+                        setCheckOutTime(extractTimeForInput(data.checkout_time));
+                        setStatus(data.status || 'present');
+                    }
+                } catch (error) {
+                    console.error("Failed to load details", error);
+                    // We silently fail here because we still have the prop data to rely on
+                } finally {
+                    setIsLoadingDetails(false);
+                }
+            }
+        };
+
+        fetchDetails();
+    }, [isOpen, record.id]); 
 
     const handleSave = async () => {
-        if (!isRealRecord) return;
-
         setIsSaving(true);
 
-        // --- FIX 1: UTC DATE CONSTRUCTION FOR EDIT ---
+        // Use fetchedRecord if available (more accurate), otherwise fallback to prop record
+        const activeRecord = fetchedRecord || record;
+        const recordDate = activeRecord.date;
+
+        if (!recordDate) {
+             toast({ description: "Missing date information.", variant: "destructive" });
+             setIsSaving(false);
+             return;
+        }
+
+        // --- CONSTRUCT ISO DATE FROM TIME INPUT ---
         const timeToISO = (time: string | null): string | null => {
             if (!time) return null;
-            const [hours, minutes] = time.split(':').map(Number);
             
-            // We need to combine the existing record Date with the new Time, strictly in UTC
-            const dateObj = new Date(record.date); // This might parse as local depending on browser
-            const year = dateObj.getFullYear();
-            const month = dateObj.getMonth();
-            const day = dateObj.getDate();
+            const [hours, minutes] = time.split(':').map(Number);
+            const [year, month, day] = recordDate.split('-').map(Number);
 
-            // Create Date.UTC so .toISOString() doesn't shift it
-            return new Date(Date.UTC(year, month, day, hours, minutes, 0)).toISOString();
+            // Construct Date object using Local Time (matches user input)
+            const dateObj = new Date(year, month - 1, day, hours, minutes, 0);
+            
+            // Return ISO string (handles the UTC conversion for the DB)
+            return dateObj.toISOString();
         };
 
         const checkinISO = timeToISO(checkInTime);
@@ -211,17 +242,17 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
 
         if (!checkinISO && status !== 'absent' && status !== 'leave') {
             toast({ 
-                description: "Check-in time is required if status is Present, Late, or Half Day.", 
+                description: "Check-in time is required for this status.", 
                 variant: "destructive" 
             });
             setIsSaving(false);
             return;
         }
 
-        const payload: AttendanceUpdatePayload = {
-            id: record.id as number, 
-            staff_id: record.staff_id,
-            date: record.date,
+        const payload: LocalAttendanceUpdatePayload = {
+            id: activeRecord.id as number, 
+            staff_id: activeRecord.staff_id as number,
+            date: activeRecord.date as string,
             checkin_time: checkinISO,
             checkout_time: checkoutISO,
             status: status,
@@ -239,18 +270,26 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
 
     if (!isOpen) return null;
 
+    // --- DETERMINE DISPLAY NAME ---
+    // 1. Try fetched record name -> 2. Try prop record name -> 3. Try finding in staff list by ID
+    const staffFromList = staffs.find(s => s.id === record.staff_id);
+    const displayStaffName = fetchedRecord?.staff_name || record.staff_name || staffFromList?.name || 'Unknown Staff';
+    const displayDate = fetchedRecord?.date || record.date;
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle>Edit Attendance Record</DialogTitle>
-                    <DialogDescription>
-                        Modify attendance details for {staff?.name || 'Unknown Staff'} on {record.date}.
+                    <DialogDescription className="flex items-center gap-2 mt-2">
+                         <span className="font-semibold text-gray-900">{displayStaffName}</span>
+                         <span>•</span>
+                         <span>{displayDate}</span>
+                         {isLoadingDetails && <Loader2 className="h-3 w-3 animate-spin text-blue-500" />}
                     </DialogDescription>
                 </DialogHeader>
+
                 <div className="grid gap-4 py-4">
-                    
                     {/* Status Select */}
                     <div className="space-y-1">
                         <label className="text-sm font-medium">Status</label>
@@ -260,7 +299,9 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
                             </SelectTrigger>
                             <SelectContent>
                                 {ATTENDANCE_STATUSES.map(s => (
-                                    <SelectItem key={s} value={s}>{s.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}</SelectItem>
+                                    <SelectItem key={s} value={s}>
+                                        {s.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                                    </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -285,8 +326,8 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
                             onChange={(e) => setCheckOutTime(e.target.value)}
                         />
                     </div>
-
                 </div>
+
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancel</Button>
                     <Button onClick={handleSave} disabled={isSaving}>
@@ -549,19 +590,10 @@ export function HRDashboard() {
     setManualStatus('present'); 
   }
 
-  // --- FIX 2: UTC DATE CONSTRUCTION FOR MAIN FORM ---
-  // This is the critical fix for Vercel/Cloud hosting.
+  // --- UTC DATE CONSTRUCTION FOR MAIN FORM ---
   const getSubmissionDateTime = (dateString: string, timeString: string) => {
-    // 1. Parse string inputs safely to numbers
     const [year, month, day] = dateString.split('-').map(Number);
     const [hours, minutes] = timeString.split(':').map(Number);
-    
-    // 2. Use Date.UTC to construct the date.
-    // Why? new Date(year, month, day...) uses LOCAL time. 
-    // When .toISOString() is called on Local time, it shifts to UTC (subtracts 5:30 for India).
-    // Date.UTC creates the date assuming the numbers ARE ALREADY UTC.
-    // So 10:00 becomes 10:00 UTC. When sent to DB, it stays 10:00.
-    
     return new Date(Date.UTC(year, month - 1, day, hours, minutes, 0));
   }
   
@@ -583,14 +615,13 @@ export function HRDashboard() {
     const staffIdNum = parseInt(selectedStaffId);
     const staffName = staffs.find(s => s.id === staffIdNum)?.name || 'Unknown Staff'
     
-    // Use the fixed UTC generator
     const submissionDateTime = getSubmissionDateTime(attendanceDate, attendanceTime);
 
     const payload: AttendanceCreatePayload = {
         staff_id: staffIdNum,
         date: attendanceDate, 
         status: statusToSend, 
-        checkin_time: submissionDateTime.toISOString(), // This will now match input time exactly
+        checkin_time: submissionDateTime.toISOString(), 
     };
 
     try {
@@ -643,14 +674,13 @@ export function HRDashboard() {
     const staffIdNum = parseInt(selectedStaffId);
     const staffName = staffs.find(s => s.id === staffIdNum)?.name || 'Unknown Staff'
     
-    // Use the fixed UTC generator
     const submissionDateTime = getSubmissionDateTime(attendanceDate, attendanceTime);
 
     try {
         const result = await checkoutAttendance(
             staffIdNum,
             attendanceDate,
-            submissionDateTime.toISOString(), // This will now match input time exactly
+            submissionDateTime.toISOString(), 
             manualStatus 
         );
         
@@ -683,15 +713,18 @@ export function HRDashboard() {
     }
   }
 
-  // --- 3. GENERIC UPDATE LOGIC ---
-  const handleUpdateRecord = async (payload: AttendanceUpdatePayload) => {
+  // --- 3. ACTUAL API UPDATE LOGIC ---
+  const handleUpdateRecord = async (payload: LocalAttendanceUpdatePayload) => {
       try {
-          const result = await updateAttendance(payload); 
+          // Destructure ID from payload because the API expects: updateAttendance(id, payload)
+          const { id, ...apiPayload } = payload;
+
+          const result = await updateAttendance(id, apiPayload); 
           
           if (result.data) {
               toast({
                   title: "Record Updated",
-                  description: `Attendance record ID ${payload.id} successfully modified.`,
+                  description: `Attendance record ID ${id} successfully modified.`,
                   duration: 4000,
               });
               await fetchAttendance();
@@ -724,7 +757,7 @@ export function HRDashboard() {
     }
 
     if (filterMonth) {
-        filteredRecords = filteredRecords.filter(r => r.date.startsWith(filterMonth));
+        filteredRecords = filteredRecords.filter(r => r.date?.startsWith(filterMonth));
     } else if (filterDate) {
         filteredRecords = filteredRecords.filter(r => r.date === filterDate);
     }
