@@ -20,6 +20,7 @@ import {
   getAllTasks,
   getOrder,
   updateOrder, 
+  deleteOrder, // <--- ADDED THIS IMPORT
   getTasksByOrder, 
   type Order, 
   type Staff,
@@ -61,7 +62,7 @@ import {
   ChevronDown,
   Image as ImageIcon,
   Hourglass, // Added for Due Date/Overdue
-  XCircle, // Added for Filter Clear (though not implemented in provided filters)
+  XCircle, 
 } from "lucide-react"
 
 type OrderWithGeneratedId = Order & { generated_order_id?: string | null };
@@ -334,7 +335,7 @@ export function ProjectDashboard() {
     if(tasksResponse.data) setTasks(tasksResponse.data);
   }
 
-  // --- Modal Handlers (omitted for brevity, assume unchanged) ---
+  // --- Modal Handlers ---
   const handleOpenAssignModal = (project: Order) => {
     setSelectedProject(project)
     setIsAssignModalOpen(true)
@@ -367,7 +368,7 @@ export function ProjectDashboard() {
   };
 
 
-  // 3. UPDATED handleViewProject to fetch tasks (omitted for brevity, assume unchanged)
+  // 3. UPDATED handleViewProject
   const handleViewProject = async (project: Order) => {
     setViewingOrder(null);
     setViewingOrderTasks([]); 
@@ -402,12 +403,27 @@ export function ProjectDashboard() {
     setIsViewingOrderTasksLoading(false);
   }
 
-  const handleDeleteProject = (id: number) => {
-    console.log("Deleting project/order:", id);
-    // Logic for deleting the project/order
+  // --- UPDATED DELETE HANDLER ---
+  const handleDeleteProject = async (id: number) => {
+    const response = await deleteOrder(id);
+
+    if (response.error) {
+        toast({
+            title: "Delete Failed",
+            description: response.error,
+            variant: "destructive",
+        });
+    } else {
+        toast({
+            title: "Project Deleted",
+            description: `Project PRJ-${id} has been successfully deleted.`,
+        });
+        // Reload data to reflect deletion
+        reloadData();
+    }
   }
   
-  // --- Status Update Handlers (omitted for brevity, assume unchanged) ---
+  // --- Status Update Handlers ---
 
   const handleOpenStatusUpdateModal = (project: OrderWithGeneratedId) => {
     setSelectedProjectForStatusUpdate(project);
@@ -474,7 +490,7 @@ export function ProjectDashboard() {
     setIsStatusUpdating(false);
   }
   
-  // --- Helper for Payment Status Badge (omitted for brevity, assume unchanged) ---
+  // --- Helper for Payment Status Badge ---
   const getPaymentStatusBadge = (status: string) => {
     const lowerStatus = status.toLowerCase();
     let color = 'bg-gray-100 text-gray-800';
@@ -545,7 +561,7 @@ export function ProjectDashboard() {
     return matchesSearch && matchesStatus && matchesStaff && matchesCategory && matchesDate;
   })
   
-  // --- Filtering Logic (Tasks) (omitted for brevity, assume unchanged) ---
+  // --- Filtering Logic (Tasks) ---
   const filteredTasks = tasks.filter(task => {
     // ... existing filtering logic ...
     
@@ -591,7 +607,7 @@ export function ProjectDashboard() {
     return matchesSearch && matchesStatus && matchesStaff && matchesDate;
   });
   
-  // --- Dynamic Metrics (omitted for brevity, assume unchanged) ---
+  // --- Dynamic Metrics ---
   const activeProjects = projects.filter(p => p.status === 'in_progress').length
   const completedProjects = projects.filter(p => p.status === 'completed').length
   const projectMetrics = [
@@ -602,7 +618,7 @@ export function ProjectDashboard() {
   ]
 
 
-  // --- Filter Components (Updated to include Category Filter) ---
+  // --- Filter Components ---
 
   const renderOrderFilters = (isMobile: boolean) => (
     <>
@@ -1265,7 +1281,7 @@ export function ProjectDashboard() {
         </Tabs>
       </main>
 
-      {/* MODALS & TOASTER (omitted for brevity, assume unchanged) */}
+      {/* MODALS & TOASTER */}
       <AssignTaskForm 
         isOpen={isAssignModalOpen}
         onClose={() => setIsAssignModalOpen(false)}
@@ -1283,7 +1299,7 @@ export function ProjectDashboard() {
         staffList={staff} 
       />
 
-      {/* STATUS UPDATE DIALOG (omitted for brevity, assume unchanged) */}
+      {/* STATUS UPDATE DIALOG */}
       <Dialog open={isStatusUpdateModalOpen} onOpenChange={setIsStatusUpdateModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
@@ -1355,7 +1371,7 @@ export function ProjectDashboard() {
       </Dialog>
 
 
-      {/* ORDER DETAILS VIEW DIALOG (omitted for brevity, assume unchanged) */}
+      {/* ORDER DETAILS VIEW DIALOG */}
       <Dialog open={!!viewingOrder} onOpenChange={(open) => { 
           if (!open) { 
               setViewingOrder(null);
