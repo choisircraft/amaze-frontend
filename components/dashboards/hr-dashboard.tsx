@@ -157,7 +157,6 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
     
     const isRealRecord = typeof record.id === 'number';
 
-    // This modal should never open for a synthetic record anyway, but this is a safeguard.
     if (!isRealRecord) {
         onClose();
         return null;
@@ -166,18 +165,22 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
     const staff = staffs.find(s => s.id === record.staff_id);
     
     const [checkInTime, setCheckInTime] = useState(
-        record.checkin_time ? new Date(record.checkin_time).toTimeString().slice(0, 5) : ''
+        record.checkin_time ? new Date(record.checkin_time).toISOString().substring(11, 16) : '' 
+        // Note: Using substring(11,16) on ISO string gets HH:MM in UTC, ensuring edit form sees consistent raw data
     );
     const [checkOutTime, setCheckOutTime] = useState(
-        record.checkout_time ? new Date(record.checkout_time).toTimeString().slice(0, 5) : ''
+        record.checkout_time ? new Date(record.checkout_time).toISOString().substring(11, 16) : ''
     );
     const [status, setStatus] = useState(record.status || 'present');
     const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         if (isRealRecord) {
-            setCheckInTime(record.checkin_time ? new Date(record.checkin_time).toTimeString().slice(0, 5) : '');
-            setCheckOutTime(record.checkout_time ? new Date(record.checkout_time).toTimeString().slice(0, 5) : '');
+            // Helper to safe extract time
+            const getIsoTime = (iso: string | null) => iso ? new Date(iso).toISOString().substring(11, 16) : '';
+            
+            setCheckInTime(getIsoTime(record.checkin_time));
+            setCheckOutTime(getIsoTime(record.checkout_time));
             setStatus(record.status || 'present');
         }
     }, [record, isRealRecord]);
@@ -188,12 +191,19 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
 
         setIsSaving(true);
 
+        // --- FIX 1: UTC DATE CONSTRUCTION FOR EDIT ---
         const timeToISO = (time: string | null): string | null => {
             if (!time) return null;
             const [hours, minutes] = time.split(':').map(Number);
-            const date = new Date(record.date);
-            date.setHours(hours, minutes, 0, 0);
-            return date.toISOString();
+            
+            // We need to combine the existing record Date with the new Time, strictly in UTC
+            const dateObj = new Date(record.date); // This might parse as local depending on browser
+            const year = dateObj.getFullYear();
+            const month = dateObj.getMonth();
+            const day = dateObj.getDate();
+
+            // Create Date.UTC so .toISOString() doesn't shift it
+            return new Date(Date.UTC(year, month, day, hours, minutes, 0)).toISOString();
         };
 
         const checkinISO = timeToISO(checkInTime);
@@ -241,7 +251,7 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     
-                    {/* Status Select (Updated options) */}
+                    {/* Status Select */}
                     <div className="space-y-1">
                         <label className="text-sm font-medium">Status</label>
                         <Select value={status} onValueChange={setStatus}>
@@ -294,7 +304,7 @@ const AttendanceEditModal: React.FC<AttendanceEditModalProps> = ({ record, staff
 }
 
 // =============================================================
-// 2. ATTENDANCE REGISTER COMPONENT (Updated sorting logic)
+// 2. ATTENDANCE REGISTER COMPONENT
 // =============================================================
 
 interface AttendanceRegisterSectionProps {
@@ -306,7 +316,6 @@ interface AttendanceRegisterSectionProps {
 
 const AttendanceRegisterSection: React.FC<AttendanceRegisterSectionProps> = ({ data, isFiltered, onEdit }) => {
     
-    // Grouping by date and applying custom sorting
     const groupedData = useMemo(() => {
         return data.reduce((acc, record) => {
             const dateStr = record.date 
@@ -318,7 +327,6 @@ const AttendanceRegisterSection: React.FC<AttendanceRegisterSectionProps> = ({ d
             }
             acc[dateStr].push(record);
             
-            // Custom Sort logic: Status Priority -> Staff Name
             acc[dateStr].sort((a, b) => {
                 const statusA = (a.status || 'unknown').toLowerCase();
                 const statusB = (b.status || 'unknown').toLowerCase();
@@ -327,10 +335,8 @@ const AttendanceRegisterSection: React.FC<AttendanceRegisterSectionProps> = ({ d
                 const priorityB = STATUS_PRIORITY[statusB] || 99;
                 
                 if (priorityA !== priorityB) {
-                    return priorityA - priorityB; // Sort by priority (lower number first)
+                    return priorityA - priorityB;
                 }
-                
-                // Secondary sort: Staff Name alphabetically
                 return (a.staff_name || '').localeCompare(b.staff_name || '');
             });
             
@@ -338,7 +344,6 @@ const AttendanceRegisterSection: React.FC<AttendanceRegisterSectionProps> = ({ d
         }, {} as Record<string, ComprehensiveAttendance[]>);
     }, [data]);
     
-    // Sorting dates (newest first)
     const sortedDates = Object.keys(groupedData).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
     if (data.length === 0 && isFiltered) {
@@ -372,7 +377,6 @@ const AttendanceRegisterSection: React.FC<AttendanceRegisterSectionProps> = ({ d
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="p-0">
-                        {/* Desktop/Tablet Header */}
                         <div className="hidden sm:grid grid-cols-7 text-xs font-semibold uppercase text-gray-500 bg-gray-100 py-3 px-6 border-b">
                             <div className="col-span-2">Staff Member</div>
                             <div>Role</div>
@@ -382,48 +386,40 @@ const AttendanceRegisterSection: React.FC<AttendanceRegisterSectionProps> = ({ d
                             <div className="text-right">Actions</div> 
                         </div>
                         
-                        {/* Attendance Rows */}
                         {groupedData[dateStr].map((record) => {
-                            // Since we removed synthetic records, this check is less critical but harmless.
                             const isSynthetic = typeof record.id !== 'number';
                             
                             return (
                                 <div key={record.id} className={`grid grid-cols-3 sm:grid-cols-7 items-center gap-2 sm:gap-4 p-4 border-b transition hover:bg-gray-50`}>
                                     
-                                    {/* Staff Member (Col 1-2) */}
                                     <div className="col-span-2 flex items-center">
                                         <User className="h-4 w-4 mr-2 text-gray-400 hidden sm:inline" />
                                         <span className="font-medium text-base">{record.staff_name || 'Unknown'}</span>
                                     </div>
                                     
-                                    {/* Role (Col 3) */}
                                     <div className="hidden sm:block text-sm text-gray-600">
                                         {record.staff_role || 'N/A'}
                                     </div>
 
-                                    {/* Clock In (Col 4) */}
                                     <div className="text-sm hidden sm:block">
                                         {formatTimeFromISO(record.checkin_time)}
                                     </div>
                                     
-                                    {/* Clock Out (Col 5) */}
                                     <div className="text-sm hidden sm:block">
                                         {formatTimeFromISO(record.checkout_time)}
                                     </div>
                                     
-                                    {/* Status (Col 6) */}
                                     <div className="col-span-1 text-center hidden sm:block">
                                         {getAttendanceStatusBadge(record.status)}
                                     </div>
 
-                                    {/* Actions (Col 7) */}
                                     <div className="col-span-1 flex justify-end">
                                         <Button 
                                             variant="ghost" 
                                             size="sm" 
                                             onClick={() => onEdit(record)}
                                             title="Edit Attendance"
-                                            disabled={isSynthetic} // Will always be false now
+                                            disabled={isSynthetic}
                                         >
                                             {isSynthetic ? (
                                                 <X className="h-4 w-4 text-gray-300" />
@@ -443,7 +439,7 @@ const AttendanceRegisterSection: React.FC<AttendanceRegisterSectionProps> = ({ d
 };
 
 // =============================================================
-// 3. SUBMISSION ERROR MODAL COMPONENT (Unchanged)
+// 3. SUBMISSION ERROR MODAL COMPONENT
 // =============================================================
 
 interface SubmissionErrorModalProps {
@@ -478,7 +474,7 @@ const SubmissionErrorModal: React.FC<SubmissionErrorModalProps> = ({ error, onCl
 }
 
 // =============================================================
-// 4. HR DASHBOARD COMPONENT (Main Logic & Comprehensive Roster)
+// 4. HR DASHBOARD COMPONENT
 // =============================================================
 export function HRDashboard() {
   const { toast } = useToast()
@@ -553,14 +549,23 @@ export function HRDashboard() {
     setManualStatus('present'); 
   }
 
+  // --- FIX 2: UTC DATE CONSTRUCTION FOR MAIN FORM ---
+  // This is the critical fix for Vercel/Cloud hosting.
   const getSubmissionDateTime = (dateString: string, timeString: string) => {
+    // 1. Parse string inputs safely to numbers
+    const [year, month, day] = dateString.split('-').map(Number);
     const [hours, minutes] = timeString.split(':').map(Number);
-    const submissionDateTime = new Date(dateString); 
-    submissionDateTime.setHours(hours, minutes, 0, 0); 
-    return submissionDateTime;
+    
+    // 2. Use Date.UTC to construct the date.
+    // Why? new Date(year, month, day...) uses LOCAL time. 
+    // When .toISOString() is called on Local time, it shifts to UTC (subtracts 5:30 for India).
+    // Date.UTC creates the date assuming the numbers ARE ALREADY UTC.
+    // So 10:00 becomes 10:00 UTC. When sent to DB, it stays 10:00.
+    
+    return new Date(Date.UTC(year, month - 1, day, hours, minutes, 0));
   }
   
-  // --- 1. CHECK-IN SUBMISSION LOGIC (using createAttendance) ---
+  // --- 1. CHECK-IN SUBMISSION LOGIC ---
   const handleCheckInSubmit = async () => {
     if (!selectedStaffId || !attendanceTime || !attendanceDate) {
       toast({ 
@@ -577,13 +582,15 @@ export function HRDashboard() {
     setSubmissionError(null); 
     const staffIdNum = parseInt(selectedStaffId);
     const staffName = staffs.find(s => s.id === staffIdNum)?.name || 'Unknown Staff'
+    
+    // Use the fixed UTC generator
     const submissionDateTime = getSubmissionDateTime(attendanceDate, attendanceTime);
 
     const payload: AttendanceCreatePayload = {
         staff_id: staffIdNum,
         date: attendanceDate, 
         status: statusToSend, 
-        checkin_time: submissionDateTime.toISOString(),
+        checkin_time: submissionDateTime.toISOString(), // This will now match input time exactly
     };
 
     try {
@@ -620,7 +627,7 @@ export function HRDashboard() {
   }
 
 
-  // --- 2. CHECK-OUT SUBMISSION LOGIC (using checkoutAttendance) ---
+  // --- 2. CHECK-OUT SUBMISSION LOGIC ---
   const handleCheckOutSubmit = async () => {
     if (!selectedStaffId || !attendanceTime || !attendanceDate || !manualStatus) {
       toast({ 
@@ -635,14 +642,15 @@ export function HRDashboard() {
     setSubmissionError(null); 
     const staffIdNum = parseInt(selectedStaffId);
     const staffName = staffs.find(s => s.id === staffIdNum)?.name || 'Unknown Staff'
+    
+    // Use the fixed UTC generator
     const submissionDateTime = getSubmissionDateTime(attendanceDate, attendanceTime);
 
     try {
-        // Use the selected status for checkout
         const result = await checkoutAttendance(
             staffIdNum,
             attendanceDate,
-            submissionDateTime.toISOString(), 
+            submissionDateTime.toISOString(), // This will now match input time exactly
             manualStatus 
         );
         
@@ -675,7 +683,7 @@ export function HRDashboard() {
     }
   }
 
-  // --- 3. GENERIC UPDATE LOGIC (Used by Edit Modal) ---
+  // --- 3. GENERIC UPDATE LOGIC ---
   const handleUpdateRecord = async (payload: AttendanceUpdatePayload) => {
       try {
           const result = await updateAttendance(payload); 
@@ -704,19 +712,17 @@ export function HRDashboard() {
 
 
   // ====================================================================
-  // --- CORE FILTERING LOGIC (Simplified) ---
+  // --- CORE FILTERING LOGIC ---
   // ====================================================================
 
   const getComprehensiveAttendance = useMemo((): ComprehensiveAttendance[] => {
     let filteredRecords = [...attendanceRecords];
     
-    // 1. Apply Staff Filter
     const staffIdFilterNum = filterStaffId !== 'all' && filterStaffId !== '' ? parseInt(filterStaffId) : null;
     if (staffIdFilterNum) {
         filteredRecords = filteredRecords.filter(record => record.staff_id === staffIdFilterNum);
     }
 
-    // 2. Apply Period Filter (Month takes precedence)
     if (filterMonth) {
         filteredRecords = filteredRecords.filter(r => r.date.startsWith(filterMonth));
     } else if (filterDate) {
@@ -896,7 +902,7 @@ export function HRDashboard() {
             </TabsContent>
 
             {/* ==================================================================== */}
-            {/* ATTENDANCE REGISTER SECTION (Using ComprehensiveAttendance)          */}
+            {/* ATTENDANCE REGISTER SECTION                                          */}
             {/* ==================================================================== */}
             <TabsContent value="attendance_register">
                 <Card>
