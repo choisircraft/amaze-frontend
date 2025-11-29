@@ -15,7 +15,6 @@ interface ApiResponse<T> {
 /**
  * Interface representing a full Daily Sales Report record from the database.
  * Corresponds to the `DailySalesReport` Pydantic model.
- * Note: Dates and DateTimes are handled as ISO 8601 strings in TypeScript.
  */
  export interface DailySalesReport {
   id: number;
@@ -26,28 +25,33 @@ interface ApiResponse<T> {
   total_day_collection?: number | null;
   total_amount_on_cash?: number | null;
   total_amount_on_ac?: number | null;
-  iob?: number | null;
-  cd?: number | null;
-  anil?: number | null;
-  remya?: number | null;
-  rgb_186_swiping_machine?: number | null;
-  amaze_ac?: number | null;
+
+  // Updated Column Names (Matches backend Pydantic models)
+  ibo_420?: number | null;
+  decor_uj?: number | null;     // UPDATED: lowercase to match backend
+  anil_fed?: number | null;
+  remya_fed?: number | null;
+  kdb_186?: number | null;
+  kgb_070?: number | null;
+  
+  // New Column
+  kiran_uj?: number | null;
+
   cheque?: number | null;
   date?: string | null; // YYYY-MM-DD
   created_by?: number | null;
   updated_by?: number | null;
   status?: string | null;
   created_on?: string | null; // ISO 8601 DateTime string
-  expense?: number | null;     // NEW
-  category?: string | null;    // NEW
+  expense?: number | null;     
+  category?: string | null;    
 }
 
 /**
  * Payload for creating a new daily sales report.
- * Corresponds to the `DailySalesReportCreate` Pydantic model.
  */
  export interface DailySalesReportCreatePayload {
-  total_sales_order: number;
+  total_sales_order?: number | null;
   date: string; // YYYY-MM-DD
 
   total_sale_order_amount?: number | null;
@@ -56,22 +60,27 @@ interface ApiResponse<T> {
   total_day_collection?: number | null;
   total_amount_on_cash?: number | null;
   total_amount_on_ac?: number | null;
-  iob?: number | null;
-  cd?: number | null;
-  anil?: number | null;
-  remya?: number | null;
-  rgb_186_swiping_machine?: number | null;
-  amaze_ac?: number | null;
+
+  // Updated Column Names
+  ibo_420?: number | null;
+  decor_uj?: number | null;     // UPDATED: lowercase
+  anil_fed?: number | null;
+  remya_fed?: number | null;
+  kdb_186?: number | null;
+  kgb_070?: number | null;
+
+  // New Column
+  kiran_uj?: number | null;
+
   cheque?: number | null;
   status?: string | null;
 
-  expense?: number | null;   // NEW
-  category?: string | null;  // NEW
+  expense?: number | null;
+  category?: string | null;
 }
 
 /**
  * Payload for partially updating a daily sales report.
- * Corresponds to the `DailySalesReportBase` Pydantic model used in the PATCH endpoint.
  */
  export interface DailySalesReportUpdatePayload {
   total_sales_order?: number;
@@ -81,32 +90,32 @@ interface ApiResponse<T> {
   total_day_collection?: number;
   total_amount_on_cash?: number;
   total_amount_on_ac?: number;
-  iob?: number;
-  cd?: number;
-  anil?: number;
-  remya?: number;
-  rgb_186_swiping_machine?: number;
-  amaze_ac?: number;
+
+  // Updated Column Names
+  ibo_420?: number;
+  decor_uj?: number;     // UPDATED: lowercase
+  anil_fed?: number;
+  remya_fed?: number;
+  kdb_186?: number;
+  kgb_070?: number;
+
+  // New Column
+  kiran_uj?: number;
+
   cheque?: number;
   date?: string; // YYYY-MM-DD
   status?: string;
 
-  expense?: number;     // NEW
-  category?: string;    // NEW
+  expense?: number;
+  category?: string;
 }
 
 // --- API Functions ---
 
-/**
- * Creates a new daily sales report.
- * Corresponds to: POST /accounts/daily_sales_report
- */
 export async function createDailySalesReport(
   payload: DailySalesReportCreatePayload,
 ): Promise<ApiResponse<{ message: string; report: DailySalesReport }>> {
   try {
-    console.log(payload);
-    
     const response = await fetch(`${API_BASE_URL}/accounts/daily_sales_report`, {
       method: 'POST',
       headers: getAuthHeaders(),
@@ -126,10 +135,6 @@ export async function createDailySalesReport(
   }
 }
 
-/**
- * Fetches all daily sales reports.
- * Corresponds to: GET /accounts/daily_sales_report
- */
 export async function getAllDailySalesReports(): Promise<ApiResponse<DailySalesReport[]>> {
   try {
     const response = await fetch(`${API_BASE_URL}/accounts/daily_sales_report`, {
@@ -150,10 +155,6 @@ export async function getAllDailySalesReports(): Promise<ApiResponse<DailySalesR
   }
 }
 
-/**
- * Fetches a single daily sales report by its ID.
- * Corresponds to: GET /accounts/daily_sales_report/{id}
- */
 export async function getDailySalesReportById(id: number): Promise<ApiResponse<DailySalesReport>> {
   try {
     const response = await fetch(`${API_BASE_URL}/accounts/daily_sales_report/${id}`, {
@@ -174,10 +175,6 @@ export async function getDailySalesReportById(id: number): Promise<ApiResponse<D
   }
 }
 
-/**
- * Updates an existing daily sales report.
- * Corresponds to: PATCH /accounts/daily_sales_report/{id}
- */
 export async function updateDailySalesReport(
   id: number,
   payload: DailySalesReportUpdatePayload,
@@ -202,10 +199,6 @@ export async function updateDailySalesReport(
   }
 }
 
-/**
- * Deletes a daily sales report by its ID.
- * Corresponds to: DELETE /accounts/daily_sales_report/{id}
- */
 export async function deleteDailySalesReport(
   id: number,
 ): Promise<ApiResponse<{ message: string; id: number }>> {
