@@ -92,8 +92,14 @@ const mapApiToComponent = (apiReport: DailySalesReport): DailyReportEntry => {
         expense: apiReport.expense ?? 0,
         category: apiReport.category ?? '',
         acDetails: {
-            IOB: apiReport.iob ?? 0, CD: apiReport.cd ?? 0, ANIL: apiReport.anil ?? 0, REMYA: apiReport.remya ?? 0,
-            'RGB-186 SWIPING MACHINE': apiReport.rgb_186_swiping_machine ?? 0, 'AMAZE A/C': apiReport.amaze_ac ?? 0, CHEQUE: apiReport.cheque ?? 0,
+            'IBO 420': apiReport.ibo_420 ?? 0,
+            'Decor UJ': apiReport.decor_uj ?? 0, // UPDATED: decor_uj (lowercase)
+            'Anil Fed': apiReport.anil_fed ?? 0,
+            'Remya Fed': apiReport.remya_fed ?? 0,
+            'KDB 186': apiReport.kdb_186 ?? 0,
+            'KGB 070': apiReport.kgb_070 ?? 0,
+            'Kiran UJ': apiReport.kiran_uj ?? 0, 
+            'Cheque': apiReport.cheque ?? 0,
         },
     };
 };
@@ -112,11 +118,29 @@ const DailyReportUpload = ({ onReportCreate, onReportUpdate, reportToEdit, onCan
     const { toast } = useToast();
     const isEditMode = !!reportToEdit;
     
+    // Updated initial state with new column names
     const initialFormState = {
-        date: new Date().toISOString().split('T')[0], total_sales_order: '', total_sale_order_amount: '', sale_order_collection: '',
-        sale_order_balance_amount: '', total_day_collection: '', total_amount_on_cash: '', total_amount_on_ac: '', iob: '',
-        cd: '', anil: '', remya: '', rgb_186_swiping_machine: '', amaze_ac: '', cheque: '',
-        expense: '', category: '' 
+        date: new Date().toISOString().split('T')[0], 
+        total_sales_order: '', 
+        total_sale_order_amount: '', 
+        sale_order_collection: '',
+        sale_order_balance_amount: '', 
+        total_day_collection: '', 
+        total_amount_on_cash: '', 
+        total_amount_on_ac: '', 
+        
+        // Updated Accounts
+        ibo_420: '', 
+        decor_uj: '', // UPDATED: decor_uj (lowercase)
+        anil_fed: '', 
+        remya_fed: '', 
+        kdb_186: '', 
+        kgb_070: '', 
+        kiran_uj: '', 
+        cheque: '',
+        
+        expense: '', 
+        category: '' 
     };
 
     const [formData, setFormData] = useState(initialFormState);
@@ -133,9 +157,17 @@ const DailyReportUpload = ({ onReportCreate, onReportUpdate, reportToEdit, onCan
                 total_day_collection: String(reportToEdit.total_day_collection ?? ''),
                 total_amount_on_cash: String(reportToEdit.total_amount_on_cash ?? ''),
                 total_amount_on_ac: String(reportToEdit.total_amount_on_ac ?? ''),
-                iob: String(reportToEdit.iob ?? ''), cd: String(reportToEdit.cd ?? ''), anil: String(reportToEdit.anil ?? ''),
-                remya: String(reportToEdit.remya ?? ''), rgb_186_swiping_machine: String(reportToEdit.rgb_186_swiping_machine ?? ''),
-                amaze_ac: String(reportToEdit.amaze_ac ?? ''), cheque: String(reportToEdit.cheque ?? ''),
+                
+                // Map existing data to state
+                ibo_420: String(reportToEdit.ibo_420 ?? ''), 
+                decor_uj: String(reportToEdit.decor_uj ?? ''), // UPDATED: decor_uj
+                anil_fed: String(reportToEdit.anil_fed ?? ''),
+                remya_fed: String(reportToEdit.remya_fed ?? ''), 
+                kdb_186: String(reportToEdit.kdb_186 ?? ''),
+                kgb_070: String(reportToEdit.kgb_070 ?? ''), 
+                kiran_uj: String(reportToEdit.kiran_uj ?? ''),
+                cheque: String(reportToEdit.cheque ?? ''),
+                
                 expense: String(reportToEdit.expense ?? ''),
                 category: reportToEdit.category ?? ''
             });
@@ -144,22 +176,32 @@ const DailyReportUpload = ({ onReportCreate, onReportUpdate, reportToEdit, onCan
         }
     }, [reportToEdit]);
     
+    // Auto-calculate Total AC
     useEffect(() => {
         const saleCollection = parseFloat(formData.sale_order_collection) || 0;
         const saleBalance = parseFloat(formData.sale_order_balance_amount) || 0;
         const newTotalDayCollection = saleCollection + saleBalance;
-        const iob = parseFloat(formData.iob) || 0;
-        const cd = parseFloat(formData.cd) || 0;
-        const anil = parseFloat(formData.anil) || 0;
-        const remya = parseFloat(formData.remya) || 0;
-        const swiping = parseFloat(formData.rgb_186_swiping_machine) || 0;
-        const amaze = parseFloat(formData.amaze_ac) || 0;
+        
+        const ibo = parseFloat(formData.ibo_420) || 0;
+        const decor = parseFloat(formData.decor_uj) || 0; // UPDATED: decor_uj
+        const anil = parseFloat(formData.anil_fed) || 0;
+        const remya = parseFloat(formData.remya_fed) || 0;
+        const kdb = parseFloat(formData.kdb_186) || 0;
+        const kgb = parseFloat(formData.kgb_070) || 0;
+        const kiran = parseFloat(formData.kiran_uj) || 0; 
         const cheque = parseFloat(formData.cheque) || 0;
-        const newTotalAC = iob + cd + anil + remya + swiping + amaze + cheque;
-        setFormData(prev => ({ ...prev, total_day_collection: newTotalDayCollection > 0 ? String(newTotalDayCollection) : '', total_amount_on_ac: newTotalAC > 0 ? String(newTotalAC) : '' }));
+        
+        const newTotalAC = ibo + decor + anil + remya + kdb + kgb + kiran + cheque;
+        
+        setFormData(prev => ({ 
+            ...prev, 
+            total_day_collection: newTotalDayCollection > 0 ? String(newTotalDayCollection) : '', 
+            total_amount_on_ac: newTotalAC > 0 ? String(newTotalAC) : '' 
+        }));
     }, [
-        formData.sale_order_collection, formData.sale_order_balance_amount, formData.iob, formData.cd, formData.anil, formData.remya,
-        formData.rgb_186_swiping_machine, formData.amaze_ac, formData.cheque
+        formData.sale_order_collection, formData.sale_order_balance_amount, 
+        formData.ibo_420, formData.decor_uj, formData.anil_fed, formData.remya_fed,
+        formData.kdb_186, formData.kgb_070, formData.kiran_uj, formData.cheque
     ]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -169,28 +211,49 @@ const DailyReportUpload = ({ onReportCreate, onReportUpdate, reportToEdit, onCan
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.date || !formData.total_sales_order) {
-            toast({ title: "Validation Error", description: "Date and Total Sale Orders are required.", variant: "destructive" });
+        
+        // --- VALIDATION ---
+        if (!formData.date) {
+            toast({ title: "Validation Error", description: "Date is required.", variant: "destructive" });
             return;
         }
+        
+        // Added Category Validation
+        if (!formData.category) {
+            toast({ title: "Validation Error", description: "Please select a Category.", variant: "destructive" });
+            return;
+        }
+        // ------------------
+
         setIsSubmitting(true);
-        const payload = {
-            date: formData.date, total_sales_order: parseInt(formData.total_sales_order) || 0,
+        
+        const payload: DailySalesReportCreatePayload = {
+            date: formData.date, 
+            total_sales_order: formData.total_sales_order ? parseInt(formData.total_sales_order) : null,
             total_sale_order_amount: parseFloat(formData.total_sale_order_amount) || null,
             sale_order_collection: parseFloat(formData.sale_order_collection) || null,
             sale_order_balance_amount: parseFloat(formData.sale_order_balance_amount) || null,
             total_day_collection: parseFloat(formData.total_day_collection) || null,
             total_amount_on_cash: parseFloat(formData.total_amount_on_cash) || null,
             total_amount_on_ac: parseFloat(formData.total_amount_on_ac) || null,
-            iob: parseFloat(formData.iob) || null, cd: parseFloat(formData.cd) || null, anil: parseFloat(formData.anil) || null,
-            remya: parseFloat(formData.remya) || null, rgb_186_swiping_machine: parseFloat(formData.rgb_186_swiping_machine) || null,
-            amaze_ac: parseFloat(formData.amaze_ac) || null, cheque: parseFloat(formData.cheque) || null,
+            
+            // Updated Payload keys
+            ibo_420: parseFloat(formData.ibo_420) || null, 
+            decor_uj: parseFloat(formData.decor_uj) || null, // UPDATED: decor_uj
+            anil_fed: parseFloat(formData.anil_fed) || null,
+            remya_fed: parseFloat(formData.remya_fed) || null, 
+            kdb_186: parseFloat(formData.kdb_186) || null,
+            kgb_070: parseFloat(formData.kgb_070) || null, 
+            kiran_uj: parseFloat(formData.kiran_uj) || null, 
+            
+            cheque: parseFloat(formData.cheque) || null,
             expense: parseFloat(formData.expense) || null,
             category: formData.category || null,
         };
+        
         let success = false;
         if (isEditMode) {
-            success = await onReportUpdate(reportToEdit!.id, payload);
+            success = await onReportUpdate(reportToEdit!.id, payload as DailySalesReportUpdatePayload);
         } else {
             success = await onReportCreate(payload);
         }
@@ -212,8 +275,15 @@ const DailyReportUpload = ({ onReportCreate, onReportUpdate, reportToEdit, onCan
                         <Input id="date" type="date" name="date" value={formData.date} onChange={handleChange} required className={inputClass} />
                     </div>
                     <div className="w-56">
-                        <label htmlFor="category" className={labelClass}>Category</label>
-                        <select id="category" name="category" value={formData.category} onChange={handleChange} className={selectClass}>
+                        <label htmlFor="category" className={labelClass}>Category <span className="text-red-500">*</span></label>
+                        <select 
+                            id="category" 
+                            name="category" 
+                            value={formData.category} 
+                            onChange={handleChange} 
+                            required // Added HTML5 validation
+                            className={selectClass}
+                        >
                             <option value="">Select Category...</option>
                             {EXPENSE_CATEGORIES.map((cat) => (
                                 <option key={cat.value} value={cat.value}>{cat.label}</option>
@@ -242,7 +312,7 @@ const DailyReportUpload = ({ onReportCreate, onReportUpdate, reportToEdit, onCan
                     <div className="space-y-2">
                         <div>
                             <label htmlFor="total_sales_order" className={labelClass}>Total Sale Orders (NO'S)</label>
-                            <Input id="total_sales_order" type="number" name="total_sales_order" placeholder="" value={formData.total_sales_order} onChange={handleChange} required className={inputClass} />
+                            <Input id="total_sales_order" type="number" name="total_sales_order" placeholder="" value={formData.total_sales_order} onChange={handleChange} className={inputClass} />
                         </div>
                         <div>
                             <label htmlFor="total_sale_order_amount" className={labelClass}>Total Sale Order Amount (₹)</label>
@@ -288,16 +358,19 @@ const DailyReportUpload = ({ onReportCreate, onReportUpdate, reportToEdit, onCan
                 <Card className="p-2 shadow-sm">
                     <CardTitle className="text-sm mb-1 flex items-center text-gray-700"><DollarSign className="w-3 h-3 mr-2" /> A/C Specifics</CardTitle>
                     <div className="grid grid-cols-2 gap-2">
-                        <div><label htmlFor="iob" className={labelClass}>IOB (₹)</label><Input id="iob" type="number" name="iob" placeholder="" value={formData.iob} onChange={handleChange} className={inputClass} /></div>
-                        <div><label htmlFor="cd" className={labelClass}>CD (₹)</label><Input id="cd" type="number" name="cd" placeholder="" value={formData.cd} onChange={handleChange} className={inputClass} /></div>
+                        <div><label htmlFor="ibo_420" className={labelClass}>IBO 420 (₹)</label><Input id="ibo_420" type="number" name="ibo_420" placeholder="" value={formData.ibo_420} onChange={handleChange} className={inputClass} /></div>
                         
-                        <div><label htmlFor="anil" className={labelClass}>Anil (₹)</label><Input id="anil" type="number" name="anil" placeholder="" value={formData.anil} onChange={handleChange} className={inputClass} /></div>
-                        <div><label htmlFor="remya" className={labelClass}>Remya (₹)</label><Input id="remya" type="number" name="remya" placeholder="" value={formData.remya} onChange={handleChange} className={inputClass} /></div>
+                        {/* UPDATED: decor_uj */}
+                        <div><label htmlFor="decor_uj" className={labelClass}>Decor UJ (₹)</label><Input id="decor_uj" type="number" name="decor_uj" placeholder="" value={formData.decor_uj} onChange={handleChange} className={inputClass} /></div>
                         
-                        <div><label htmlFor="rgb_186_swiping_machine" className={labelClass}>Swiping M/C (₹)</label><Input id="rgb_186_swiping_machine" type="number" name="rgb_186_swiping_machine" placeholder="" value={formData.rgb_186_swiping_machine} onChange={handleChange} className={inputClass} /></div>
-                        <div><label htmlFor="amaze_ac" className={labelClass}>Amaze A/C (₹)</label><Input id="amaze_ac" type="number" name="amaze_ac" placeholder="" value={formData.amaze_ac} onChange={handleChange} className={inputClass} /></div>
+                        <div><label htmlFor="anil_fed" className={labelClass}>Anil Fed (₹)</label><Input id="anil_fed" type="number" name="anil_fed" placeholder="" value={formData.anil_fed} onChange={handleChange} className={inputClass} /></div>
+                        <div><label htmlFor="remya_fed" className={labelClass}>Remya Fed (₹)</label><Input id="remya_fed" type="number" name="remya_fed" placeholder="" value={formData.remya_fed} onChange={handleChange} className={inputClass} /></div>
                         
-                        <div className="col-span-2"><label htmlFor="cheque" className={labelClass}>Cheque (₹)</label><Input id="cheque" type="number" name="cheque" placeholder="" value={formData.cheque} onChange={handleChange} className={inputClass} /></div>
+                        <div><label htmlFor="kdb_186" className={labelClass}>KDB 186 (₹)</label><Input id="kdb_186" type="number" name="kdb_186" placeholder="" value={formData.kdb_186} onChange={handleChange} className={inputClass} /></div>
+                        <div><label htmlFor="kgb_070" className={labelClass}>KGB 070 (₹)</label><Input id="kgb_070" type="number" name="kgb_070" placeholder="" value={formData.kgb_070} onChange={handleChange} className={inputClass} /></div>
+                        
+                        <div><label htmlFor="kiran_uj" className={labelClass}>Kiran UJ (₹)</label><Input id="kiran_uj" type="number" name="kiran_uj" placeholder="" value={formData.kiran_uj} onChange={handleChange} className={inputClass} /></div>
+                        <div><label htmlFor="cheque" className={labelClass}>Cheque (₹)</label><Input id="cheque" type="number" name="cheque" placeholder="" value={formData.cheque} onChange={handleChange} className={inputClass} /></div>
                     </div>
                 </Card>
             </div>
@@ -399,7 +472,7 @@ const DailyReportRegister = ({ reports, isLoading, onEdit, onDelete }: DailyRepo
 
                                     {/* Right: Actions & Toggle */}
                                     <div className="flex items-center gap-1 flex-shrink-0">
-                                        {/* ADDED: Order Count Badge */}
+                                        {/* Order Count Badge */}
                                         <Badge variant="outline" className="hidden sm:flex text-[10px] px-2 h-5 border-blue-200 text-blue-700 bg-blue-50">
                                             Orders: {displayReport.totalSaleOrder}
                                         </Badge>
