@@ -1,4 +1,3 @@
-// admin-tabs/financials-tab-content.tsx
 "use client"
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -94,8 +93,15 @@ const mapApiToComponent = (apiReport: DailySalesReport): DailyReportEntry => {
         expense: apiReport.expense ?? 0,
         category: apiReport.category ?? '',
         acDetails: {
-            IOB: apiReport.iob ?? 0, CD: apiReport.cd ?? 0, ANIL: apiReport.anil ?? 0, REMYA: apiReport.remya ?? 0,
-            'RGB-186 SWIPING MACHINE': apiReport.rgb_186_swiping_machine ?? 0, 'AMAZE A/C': apiReport.amaze_ac ?? 0, CHEQUE: apiReport.cheque ?? 0,
+            // Updated Account Mapping
+            'IBO 420': apiReport.ibo_420 ?? 0,
+            'Decor UJ': apiReport.decor_uj ?? 0, // Lowercase per backend update
+            'Anil Fed': apiReport.anil_fed ?? 0,
+            'Remya Fed': apiReport.remya_fed ?? 0,
+            'KDB 186': apiReport.kdb_186 ?? 0,
+            'KGB 070': apiReport.kgb_070 ?? 0,
+            'Kiran UJ': apiReport.kiran_uj ?? 0, // NEW
+            'Cheque': apiReport.cheque ?? 0,
         },
     };
 };
