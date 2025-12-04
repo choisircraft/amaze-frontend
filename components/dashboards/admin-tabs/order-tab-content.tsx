@@ -1,5 +1,5 @@
 // FILE: src/components/admin/admin-tabs/project-management-page.tsx
-import React, { useMemo, useState, useEffect } from 'react'; // Added useState and useEffect
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,21 +8,22 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-
+import { Loader2 } from "lucide-react";
 
 import { 
     type Order, 
     type DetailedTask, 
     type OrderById, 
-    getActiveStaffs // Added staff fetching function
+    getActiveStaffs, 
+    type OrderImage, 
+    getOrderImages 
 } from "@/lib/admin"; 
 
 import {
-    FolderOpen, Package, Edit, Trash2, Plus, Search, Filter, Eye, Calendar, User, UserPlus, IndianRupee, Phone, MessageSquare, CreditCard, Truck, Image as ImageIcon, Repeat2, Loader2, CheckSquare, ChevronDown
+    FolderOpen, Package, Edit, Trash2, Plus, Search, Filter, Eye, Calendar, User, UserPlus, IndianRupee, Phone, MessageSquare, CheckSquare, ChevronDown, Image as ImageIcon, Repeat2
 } from "lucide-react";
 
 // --- Type Definitions ---
-// Define a simple Staff type for the filter prop
 type Staff = {
     id: number;
     name: string;
@@ -37,7 +38,7 @@ type OrderWithGeneratedId = Order & {
     created_by_staff_name?: string | null;
     created_on?: string;
     customer_name?: string | null;
-    category?: string | null; // Added for category filtering
+    category?: string | null; 
 };
 
 // --- Constants for Filters ---
@@ -49,9 +50,7 @@ const PROJECT_CATEGORIES = [
     { value: 'sign_board_amaze', label: 'Sign Board Amaze' },
 ];
 
-
-// --- Utility Functions (Moved from AdminDashboard) ---
-
+// --- Utility Functions ---
 const getProjectStatusColor = (status?: string | null) => {
     const s = status?.toLowerCase();
     switch (s) {
@@ -89,8 +88,127 @@ const getPaymentStatusBadge = (status: string) => {
     return <Badge className={`capitalize ${color}`}>{label.replace(/_/g, ' ')}</Badge>;
 };
 
+// =============================================================
+// IMAGE MANAGER DIALOG (Integrated from Reference)
+// =============================================================
 
-// --- Dialog Component (Moved and Renamed for Clarity) ---
+interface ProjectImageManagerProps {
+    order: OrderWithGeneratedId;
+    onClose: () => void;
+}
+
+const ProjectImageManagerDialog: React.FC<ProjectImageManagerProps> = ({ order, onClose }) => {
+    const [images, setImages] = useState<OrderImage[]>([]); 
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    const orderId = order.id;
+
+    const fetchImages = useCallback(async () => {
+        setIsLoading(true);
+        setError('');
+        try {
+            // Fetching from API using lib/admin function
+            const fetchedImages = await getOrderImages(orderId); 
+            setImages(fetchedImages);
+        } catch (err) {
+            setError(`Failed to load images: ${err instanceof Error ? err.message : 'Unknown error'}`);
+            console.error(err);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [orderId]);
+
+    useEffect(() => {
+        fetchImages();
+    }, [fetchImages]);
+    
+    const handleDownload = (imageUrl: string, description: string | null, index: number) => {
+        const link = document.createElement('a');
+        link.href = imageUrl;
+        const filename = `${order.generated_order_id || `Order-${order.id}`}-${(description || `Image-${index + 1}`).replace(/\s/g, '_')}.jpg`;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    return (
+        <Dialog open={true} onOpenChange={(open) => !open && onClose()}>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center">
+                        <ImageIcon className="w-5 h-5 mr-2" /> 
+                        Images for Project PRJ-{order.id} {order.generated_order_id ? `(${order.generated_order_id})` : ''}
+                    </DialogTitle>
+                    <DialogDescription>
+                        View and download images associated with this project.
+                    </DialogDescription>
+                </DialogHeader>
+
+                {error && (
+                    <div className="p-3 bg-red-100 text-red-700 rounded text-sm">{error}</div>
+                )}
+                
+                <div className="mt-2">
+                    <h4 className="font-semibold mb-3">Project Images ({images.length})</h4>
+
+                    {isLoading ? (
+                        <div className="text-center py-8">
+                            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
+                            <p className="mt-2 text-sm text-gray-500">Loading images...</p>
+                        </div>
+                    ) : images.length === 0 ? (
+                        <div className="text-center py-8 border rounded-lg bg-gray-50">
+                            <ImageIcon className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+                            <p className="text-gray-500">No images found for this project.</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {images.map((img, index) => (
+                                <Card key={img.id} className="relative group overflow-hidden shadow-sm">
+                                    <div className="aspect-square w-full bg-gray-200 relative">
+                                        <img 
+                                            src={img.image_url} 
+                                            alt={img.description || `Project Image ${img.id}`} 
+                                            className="w-full h-full object-cover" 
+                                        />
+                                        {/* VIEW/DOWNLOAD OVERLAY */}
+                                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity space-x-2">
+                                            <a href={img.image_url} target="_blank" rel="noopener noreferrer">
+                                                <Button variant="secondary" size="icon" title="View Image">
+                                                    <Eye className="h-5 w-5" />
+                                                </Button>
+                                            </a>
+                                            <Button 
+                                                variant="secondary" 
+                                                size="icon" 
+                                                title="Download Image"
+                                                onClick={() => handleDownload(img.image_url, img.description, index)}
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <div className="p-3 text-sm">
+                                        <p className="font-medium truncate">{img.description || `Image ${img.id}`}</p>
+                                        <p className="text-xs text-gray-500 mt-1">Uploaded: {new Date(img.created_at).toLocaleDateString()}</p>
+                                    </div>
+                                </Card>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <DialogFooter className="pt-4">
+                    <Button variant="outline" onClick={onClose}>Close</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+// --- Project Details Dialog ---
 interface ProjectDetailsDialogProps {
     viewingOrder: OrderById | null;
     viewingOrderTasks: DetailedTask[];
@@ -106,10 +224,6 @@ export const ProjectDetailsDialog: React.FC<ProjectDetailsDialogProps> = ({
     onClose,
     onEditTask
 }) => {
-    // Content structure remains identical to the original OrderDetailsDialog
-    // ... (Dialog Content as previously defined) ...
-    // [Implementation details are omitted here for brevity, assuming the full code for OrderDetailsDialog is moved.]
-    
     return (
         <Dialog open={!!viewingOrder} onOpenChange={(open) => { 
             if (!open) { 
@@ -117,7 +231,6 @@ export const ProjectDetailsDialog: React.FC<ProjectDetailsDialogProps> = ({
             } 
         }}>
             <DialogContent className="sm:max-w-[425px] md:max-w-xl flex flex-col max-h-[90vh]">
-                
                 <DialogHeader className="flex-shrink-0">
                     <DialogTitle>Project Details #{viewingOrder?.id}</DialogTitle>
                     <DialogDescription>
@@ -177,7 +290,6 @@ export const ProjectDetailsDialog: React.FC<ProjectDetailsDialogProps> = ({
                             {/* PROJECT CORE DETAILS */}
                             <h4 className="font-bold text-gray-700 mt-2 border-t pt-3">Product & Project Details</h4>
                             
-                            {/* Generated Order ID Display */}
                             {viewingOrder.generated_order_id && (
                                 <div className="grid grid-cols-3 items-center gap-4">
                                     <span className="font-medium text-gray-500">Generated ID</span>
@@ -201,11 +313,6 @@ export const ProjectDetailsDialog: React.FC<ProjectDetailsDialogProps> = ({
                             </div>
 
                             <div className="grid grid-cols-3 items-center gap-4">
-                                <span className="font-medium text-gray-500">Quantity</span>
-                                <span className="col-span-2">{viewingOrder.quantity || 0}</span>
-                            </div>
-
-                            <div className="grid grid-cols-3 items-center gap-4">
                                 <span className="font-medium text-gray-500">Status</span>
                                 <Badge className={getProjectStatusColor(viewingOrder.status || 'pending')}>{viewingOrder.status || 'Pending'}</Badge>
                             </div>
@@ -220,7 +327,6 @@ export const ProjectDetailsDialog: React.FC<ProjectDetailsDialogProps> = ({
                                 </span>
                             </div>
                             
-                            {/* ... other financial details ... */}
                             <div className="grid grid-cols-3 items-center gap-4">
                                 <span className="font-medium text-gray-500">Amount Paid</span>
                                 <span className="col-span-2 flex items-center text-orange-700 font-medium">
@@ -301,7 +407,6 @@ interface ProjectManagementProps {
     // Actions
     handleOpenAssignModal: (order: OrderWithGeneratedId) => void;
     handleOpenStatusUpdateModal: (order: OrderWithGeneratedId) => void;
-    handleOpenImageModal: (order: OrderWithGeneratedId) => void;
     handleDeleteProject: (id: number) => void;
     handleOpenEditTaskModal: (task: DetailedTask) => void; 
     
@@ -322,7 +427,6 @@ export const ProjectManagementPage: React.FC<ProjectManagementProps> = ({
     handleOpenAssignModal,
     handleViewProject, 
     handleOpenStatusUpdateModal,
-    handleOpenImageModal,
     handleDeleteProject,
     handleOpenEditTaskModal,
     
@@ -334,6 +438,9 @@ export const ProjectManagementPage: React.FC<ProjectManagementProps> = ({
     
     // --- State for self-fetched data ---
     const [staff, setStaff] = useState<Staff[]>([]);
+
+    // --- State for Images Modal ---
+    const [selectedProjectForImages, setSelectedProjectForImages] = useState<OrderWithGeneratedId | null>(null);
 
     // --- Filter States ---
     const [statusFilter, setStatusFilter] = useState("all");
@@ -347,7 +454,6 @@ export const ProjectManagementPage: React.FC<ProjectManagementProps> = ({
     useEffect(() => {
         const fetchStaff = async () => {
             const response = await getActiveStaffs();
-            // Assuming the response structure is { data: { staffs: Staff[] } }
             if (response.data && response.data.staffs) {
                 setStaff(response.data.staffs);
             } else {
@@ -356,7 +462,7 @@ export const ProjectManagementPage: React.FC<ProjectManagementProps> = ({
         };
 
         fetchStaff();
-    }, []); // Empty dependency array ensures this runs only once on mount
+    }, []); 
     
     const filteredOrders = useMemo(() => orders.filter(order => {
         // Search Term Check
@@ -471,6 +577,11 @@ export const ProjectManagementPage: React.FC<ProjectManagementProps> = ({
         </>
     );
 
+    // Handler to open the Image Manager
+    const handleOpenImageModal = (project: OrderWithGeneratedId) => {
+        setSelectedProjectForImages(project);
+    };
+
     return (
         <Card>
             <CardHeader>
@@ -516,7 +627,7 @@ export const ProjectManagementPage: React.FC<ProjectManagementProps> = ({
                 
                 {isLoading ? (
                     <div className="flex items-center justify-center py-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                        <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto" />
                         <p className="mt-2 text-sm text-gray-500">Loading projects...</p>
                     </div>
                 ) : filteredOrders.length === 0 ? (
@@ -605,6 +716,7 @@ export const ProjectManagementPage: React.FC<ProjectManagementProps> = ({
                                                     <Eye className="h-3 w-3 mr-1" />View Details
                                                 </Button>
                                                 
+                                                {/* INTEGRATED IMAGE MANAGER BUTTON */}
                                                 <Button 
                                                     variant="outline" 
                                                     size="sm" 
@@ -661,7 +773,6 @@ export const ProjectManagementPage: React.FC<ProjectManagementProps> = ({
                 )}
             </CardContent>
 
-
             {/* RENDER THE PROJECT DETAILS DIALOG */}
             <ProjectDetailsDialog 
                 viewingOrder={viewingOrder}
@@ -670,6 +781,14 @@ export const ProjectManagementPage: React.FC<ProjectManagementProps> = ({
                 onClose={onCloseViewProject}
                 onEditTask={handleOpenEditTaskModal} 
             />
+
+            {/* RENDER THE IMAGE MANAGER DIALOG */}
+            {selectedProjectForImages && (
+                <ProjectImageManagerDialog 
+                    order={selectedProjectForImages} 
+                    onClose={() => setSelectedProjectForImages(null)} 
+                />
+            )}
         </Card>
     );
 };
